@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---- custom rules that your HTML relied on ---- */
+.auth-container { background-size: cover; background-position: center; }
+
+.menu-item { transition: all 0.2s ease; }
+.menu-item:hover { transform: translateY(-2px); }
+
+/* tabs */
+.category-tab.active {
+  border-bottom: 2px solid #111827; /* gray-900 */
+  color: #111827;
+}
+
+/* QR hover overlay */
+.qr-overlay { opacity: 0; transition: opacity .2s ease; }
+.restaurant-card:hover .qr-overlay { opacity: 1; }
