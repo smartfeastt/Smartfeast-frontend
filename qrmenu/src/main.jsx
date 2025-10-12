@@ -9,7 +9,7 @@ import Confirm from './pages/Confirm.jsx'
 import Staff from './pages/Staff.jsx'
 import Login from './pages/Login.jsx'
 import Signup from './pages/Signup.jsx'
-import './index.css'          // <<— THIS imports Tailwind
+import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
