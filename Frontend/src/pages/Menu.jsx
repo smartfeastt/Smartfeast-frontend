@@ -4,10 +4,12 @@ import MenuItem from '../components/MenuItem'
 import { useState } from 'react'
 import { menuItems } from '../data/menu'
 import { Link } from 'react-router-dom'
+import { useCart } from '../context/CartContext'
 
 export default function Menu() {
   const [active, setActive] = useState('All')
   const tabs = ['All', 'Starters', 'Mains', 'Desserts', 'Drinks', 'Specials']
+  const { count, total } = useCart()
 
   const filtered = menuItems.filter(m => active === 'All' || m.category === active)
 
@@ -18,7 +20,11 @@ export default function Menu() {
         right={
           <Link to="/cart" className="text-gray-600 hover:text-gray-900 relative">
             <ShoppingCart />
-            <span className="absolute -top-1 -right-1 bg-gray-800 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">3</span>
+            {count > 0 && (
+              <span className="absolute -top-1 -right-1 bg-gray-800 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
+                {count}
+              </span>
+            )}
           </Link>
         }
         backTo="/"
@@ -29,7 +35,6 @@ export default function Menu() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex flex-col md:flex-row">
             <div className="w-full md:w-1/3 lg:w-1/4 mb-6 md:mb-0">
-              {/* match original HTML: square image */}
               <div className="aspect-w-1 aspect-h-1 bg-gray-200 rounded-lg overflow-hidden">
                 <img
                   src="http://static.photos/restaurant/640x360/1"
@@ -95,15 +100,17 @@ export default function Menu() {
       </div>
 
       {/* Mobile Cart button */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white shadow-lg md:hidden p-4 border-t border-gray-200">
-        <Link to="/cart" className="w-full flex justify-between items-center">
-          <div className="flex items-center">
-            <ShoppingCart className="text-gray-600 mr-2" />
-            <span className="text-gray-800 font-medium">3 items</span>
-          </div>
-          <div className="text-gray-800 font-medium">$58.00</div>
-        </Link>
-      </div>
+      {count > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white shadow-lg md:hidden p-4 border-t border-gray-200">
+          <Link to="/cart" className="w-full flex justify-between items-center">
+            <div className="flex items-center">
+              <ShoppingCart className="text-gray-600 mr-2" />
+              <span className="text-gray-800 font-medium">{count} {count === 1 ? 'item' : 'items'}</span>
+            </div>
+            <div className="text-gray-800 font-medium">${total.toFixed(2)}</div>
+          </Link>
+        </div>
+      )}
     </>
   )
 }

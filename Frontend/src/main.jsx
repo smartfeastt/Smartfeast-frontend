@@ -9,21 +9,24 @@ import Confirm from './pages/Confirm.jsx'
 import Staff from './pages/Staff.jsx'
 import Login from './pages/Login.jsx'
 import Signup from './pages/Signup.jsx'
+import { CartProvider } from './context/CartContext.jsx'
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/menu" element={<Menu />} />
-        <Route path="/cart" element={<Cart />} />
-        <Route path="/payment" element={<Payment />} />
-        <Route path="/confirmation" element={<Confirm />} />
-        <Route path="/staff" element={<Staff />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
-      </Routes>
-    </BrowserRouter>
+    <CartProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/menu" element={<Menu />} />
+          <Route path="/cart" element={<Cart />} />
+          <Route path="/payment" element={<Payment />} />
+          <Route path="/confirmation" element={<Confirm />} />
+          <Route path="/staff" element={<Staff />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+        </Routes>
+      </BrowserRouter>
+    </CartProvider>
   </React.StrictMode>
 )
