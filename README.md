@@ -126,12 +126,7 @@ You are free to use and modify it with proper attribution.
 🌟 Keywords
 QR Menu • Smart Dining • React • Express • Tailwind CSS • MySQL • Restaurant Automation • Full Stack
 
-yaml
-Copy code
 
----
-
-Would you like me to add **badges** (e.g., *Made with React*, *License: MIT*, *Build Passing*, etc.) at the top for a more professional GitHub look?
 
 
 
