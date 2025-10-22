@@ -1,17 +1,32 @@
-import Navbar from '../components/Navbar'
-import { ShoppingCart, Star, Clock } from 'react-feather'
-import MenuItem from '../components/MenuItem'
-import { useState } from 'react'
-import { menuItems } from '../data/menu'
-import { Link } from 'react-router-dom'
-import { useCart } from '../context/CartContext'
+﻿import Navbar from "../components/Navbar"
+import { ShoppingCart, Star, Clock, Search } from "react-feather"
+import MenuItem from "../components/MenuItem"
+import { useMemo, useState } from "react"
+import { menuItems } from "../data/menu"
+import { Link } from "react-router-dom"
+import { useCart } from "../context/CartContext"
+import useMenuFilters from "../hooks/useMenuFilters"
 
 export default function Menu() {
-  const [active, setActive] = useState('All')
-  const tabs = ['All', 'Starters', 'Mains', 'Desserts', 'Drinks', 'Specials']
+  const [active, setActive] = useState("All")
+  const tabs = ["All","Starters","Mains","Desserts","Drinks","Specials"]
   const { count, total } = useCart()
 
-  const filtered = menuItems.filter(m => active === 'All' || m.category === active)
+  const base = useMemo(
+    () => menuItems.filter(m => active === "All" || m.category === active),
+    [active]
+  )
+
+  const {
+    q, setQ, maxPrice, setMaxPrice, minRating, setMinRating,
+    diet, setDiet, spicy, setSpicy, visible
+  } = useMenuFilters(base)
+
+  const toggleDiet = (key) => setDiet(s => {
+    const next = new Set(s)
+    next.has(key) ? next.delete(key) : next.add(key)
+    return next
+  })
 
   return (
     <>
@@ -50,7 +65,7 @@ export default function Menu() {
                   <Star className="w-4 h-4 text-yellow-400 mr-1" />
                   <span>4.5 (128 reviews)</span>
                 </div>
-                <div className="text-sm text-gray-500">$$ • American • Modern</div>
+                <div className="text-sm text-gray-500">$$  American  Modern</div>
               </div>
               <p className="mt-4 text-gray-600">
                 Contemporary dining with locally sourced ingredients and craft cocktails. Our menu changes seasonally
@@ -58,7 +73,7 @@ export default function Menu() {
               </p>
               <div className="mt-4 flex items-center text-sm text-gray-500">
                 <Clock className="w-4 h-4 mr-1" />
-                <span>Open now • 11:00 AM - 10:00 PM</span>
+                <span>Open now  11:00 AM - 10:00 PM</span>
               </div>
             </div>
           </div>
@@ -73,11 +88,70 @@ export default function Menu() {
               <button
                 key={t}
                 onClick={() => setActive(t)}
-                className={`category-tab py-4 px-1 text-sm font-medium ${
-                  active === t ? 'active' : 'text-gray-500 hover:text-gray-700'
-                }`}
+                className={`category-tab py-4 px-1 text-sm font-medium ${active === t ? "active" : "text-gray-500 hover:text-gray-700"}`}
               >
                 {t}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 grid gap-3 md:grid-cols-4">
+          <div className="relative">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              placeholder="Search dishes or ingredients..."
+              className="w-full pl-9 pr-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-gray-400"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600 w-24">Max Price</label>
+            <input type="number" min="0" step="1"
+              value={maxPrice ?? ""}
+              onChange={e => setMaxPrice(e.target.value ? Number(e.target.value) : null)}
+              className="w-full border rounded-md px-2 py-2"
+              placeholder="$"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600 w-24">Min Rating</label>
+            <input type="number" min="0" max="5" step="0.1"
+              value={minRating}
+              onChange={e => setMinRating(Number(e.target.value))}
+              className="w-full border rounded-md px-2 py-2"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600 w-24">Spicy</label>
+            <select
+              value={spicy ?? ""}
+              onChange={e => setSpicy(e.target.value === "" ? null : Number(e.target.value))}
+              className="w-full border rounded-md px-2 py-2"
+            >
+              <option value="">Any</option>
+              <option value="0">0 - Mild</option>
+              <option value="1">1 - Low</option>
+              <option value="2">2 - Medium</option>
+              <option value="3">3 - Hot</option>
+            </select>
+          </div>
+
+          <div className="md:col-span-4 flex flex-wrap gap-2 pt-1">
+            {["vegetarian","vegan","gluten-free"].map(d => (
+              <button
+                key={d}
+                onClick={() => toggleDiet(d)}
+                className={`text-sm px-3 py-1.5 rounded-full border ${diet.has(d) ? "bg-gray-900 text-white border-gray-900" : "border-gray-300 text-gray-700"}`}
+              >
+                {d}
               </button>
             ))}
           </div>
@@ -87,14 +161,8 @@ export default function Menu() {
       {/* Items */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtered.map((m, i) => (
-            <MenuItem
-              key={i}
-              title={m.title}
-              desc={m.desc}
-              price={m.price}
-              img={m.img}
-            />
+          {visible.map((m, i) => (
+            <MenuItem key={i} title={m.title} desc={m.desc} price={m.price} img={m.img} options={m.options} />
           ))}
         </div>
       </div>
@@ -105,7 +173,7 @@ export default function Menu() {
           <Link to="/cart" className="w-full flex justify-between items-center">
             <div className="flex items-center">
               <ShoppingCart className="text-gray-600 mr-2" />
-              <span className="text-gray-800 font-medium">{count} {count === 1 ? 'item' : 'items'}</span>
+              <span className="text-gray-800 font-medium">{count} {count === 1 ? "item" : "items"}</span>
             </div>
             <div className="text-gray-800 font-medium">${total.toFixed(2)}</div>
           </Link>
