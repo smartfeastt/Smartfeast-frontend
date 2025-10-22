@@ -128,12 +128,3 @@ QR Menu • Smart Dining • React • Express • Tailwind CSS • MySQL • Re
 
 
 
-
-
-
-
-
-
-
-
-ChatGPT can make 
