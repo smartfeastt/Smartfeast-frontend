@@ -63,22 +63,24 @@ cd client
 npm run dev
 🧱 Project Structure
 pgsql
-Copy code
-smartfeast/
-├── client/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── pages/
-│   │   ├── data/
-│   │   ├── App.jsx
-│   │   └── main.jsx
-│   └── public/
-│       └── index.html
+Copy code                    
+
+smartfeast/       
+├── client/                                
+│   ├── src/                  
+│   │   ├── components/                
+│   │   ├── pages/                 
+│   │   ├── data/               
+│   │   ├── App.jsx                
+│   │   └── main.jsx              
+│   └── public/           
+│       └── index.html               
 │
 │
-├── .env
-├── package.json
+├── .env          
+├── package.json          
 └── README.md
+
 🖥️ Scripts
 Command	Description
 npm run dev	Run frontend in development mode
