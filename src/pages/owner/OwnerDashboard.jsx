@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext.jsx'
+import { useAuth } from '../../context/AuthContext.jsx'
 import { Plus, MapPin,Settings, LogOut } from 'react-feather'
 import { Building2 } from 'lucide-react';
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext.jsx'
+import { useAuth } from '../../context/AuthContext.jsx'
 import { Plus, Users, ArrowLeft, UserPlus, X } from 'react-feather'
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -18,12 +18,18 @@ export default function OwnerOutlet() {
 
   useEffect(() => {
     fetchOutlet()
-    fetchItems()
+    // fetchItems()
   }, [outletId])
 
   const fetchOutlet = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/outlet/${outletId}`)
+      const response = await fetch(`${API_URL}/api/outlet/${outletId}`,{
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,  // ✅ include token here
+        },
+      });
       const data = await response.json()
       if (data.success) {
         setOutlet(data.outlet)

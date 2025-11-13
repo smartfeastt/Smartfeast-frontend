@@ -1,22 +1,33 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft } from 'react-feather'
+import { useAuth } from '../context/AuthContext.jsx'
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
+const API_URL = import.meta.env.VITE_API_URL;
 
 export default function ViewOutlet() {
   const { restaurantName, outletName } = useParams()
+  const { token } = useAuth()
   const [items, setItems] = useState([])
   const [outlet, setOutlet] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchMenuItems()
-  }, [restaurantName, outletName])
+    if (token && outletName && restaurantName) {
+      fetchMenuItems()
+    }
+  }, [token,restaurantName, outletName]);
 
   const fetchMenuItems = async () => {
     try {
-      const response = await fetch(`${API_URL}/item/view/${restaurantName}/${outletName}`)
+      const response = await fetch(`${API_URL}/api/item/view/${restaurantName}/${outletName}`,{
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,  // ✅ include token here
+        },
+      });
       const data = await response.json()
       if (data.success) {
         setItems(data.items || [])

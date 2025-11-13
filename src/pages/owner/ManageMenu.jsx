@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext.jsx'
+import { useAuth } from '../../context/AuthContext.jsx'
 import { Plus, Edit, Trash2, ArrowLeft, Upload } from 'react-feather'
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const API_URL = import.meta.env.VITE_API_URL;
 
 export default function ManageMenu() {
   const { outletId } = useParams()
@@ -24,12 +24,21 @@ export default function ManageMenu() {
   const [selectedFile, setSelectedFile] = useState(null)
 
   useEffect(() => {
+  if (token && outletId) {
     fetchItems()
-  }, [outletId])
+  }
+}, [token, outletId])
 
   const fetchItems = async () => {
     try {
-      const response = await fetch(`${API_URL}/item/outlet/${outletId}`)
+      console.log(token);
+      const response = await fetch(`${API_URL}/api/item/outlet/${outletId}`,{
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,  // ✅ include token here
+        },
+      });
       const data = await response.json()
       if (data.success) {
         setItems(data.items || [])
@@ -60,14 +69,12 @@ export default function ManageMenu() {
         itemQuantity: parseInt(formData.itemQuantity) || 0,
       }
 
-      if (selectedFile) {
-        createPayload.fileName = selectedFile.name
-        createPayload.contentType = selectedFile.type
-      }
-
-      const createResponse = await fetch(`${API_URL}/item/create`, {
+      const createResponse = await fetch(`${API_URL}/api/item/create`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,  // ✅ include token here
+        },
         body: JSON.stringify(createPayload),
       })
 
@@ -83,21 +90,8 @@ export default function ManageMenu() {
             headers: {
               'Content-Type': selectedFile.type,
             },
-          })
+          });
 
-          if (uploadResponse.ok) {
-            filePath = createData.signedUrl.path
-
-            // Update item with file URL
-            await fetch(`${API_URL}/item/${itemId}/photo`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                token,
-                fileUrl: filePath,
-              }),
-            })
-          }
         }
 
         setShowCreateModal(false)
@@ -116,9 +110,12 @@ export default function ManageMenu() {
   const handleUpdate = async (e) => {
     e.preventDefault()
     try {
-      const response = await fetch(`${API_URL}/item/update/${editingItem._id}`, {
+      const response = await fetch(`${API_URL}/api/item/update/${editingItem._id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+         headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,  // ✅ include token here
+        },
         body: JSON.stringify({
           token,
           ...formData,
@@ -145,9 +142,12 @@ export default function ManageMenu() {
     if (!confirm('Are you sure you want to delete this item?')) return
 
     try {
-      const response = await fetch(`${API_URL}/item/delete/${itemId}`, {
+      const response = await fetch(`${API_URL}/api/item/delete/${itemId}`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,  // ✅ include token here
+        },
         body: JSON.stringify({ token }),
       })
       const data = await response.json()

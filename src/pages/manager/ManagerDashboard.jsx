@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext.jsx'
+import { useAuth } from '../../context/AuthContext.jsx'
 import { MapPin, LogOut, Menu } from 'react-feather'
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";

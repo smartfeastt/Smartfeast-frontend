@@ -3,22 +3,22 @@ import { AuthProvider } from "./context/AuthContext.jsx";
 import { CartProvider } from './context/CartContext.jsx';
 
 // Public pages
-import Landing from "./pages/Landing.jsx";
-import SignIn from "./pages/SignIn.jsx";
-import Signup from "./pages/Signup.jsx";
+import Landing from "./pages/global/Landing.jsx";
+import SignIn from "./pages/global/SignIn.jsx";
+import Signup from "./pages/global/Signup.jsx";
 import ViewRestaurant from "./pages/ViewRestaurant.jsx";
 import ViewOutlet from "./pages/ViewOutlet.jsx";
 
 // Owner pages
-import OwnerDashboard from "./pages/OwnerDashboard.jsx";
-import OwnerRestaurant from "./pages/OwnerRestaurant.jsx";
-import OwnerOutlet from "./pages/OwnerOutlet.jsx";
-import OwnerProfile from "./pages/OwnerProfile.jsx";
-import ManageMenu from "./pages/ManageMenu.jsx";
+import OwnerDashboard from "./pages/owner/OwnerDashboard.jsx";
+import OwnerRestaurant from "./pages/owner/OwnerRestaurant.jsx";
+import OwnerOutlet from "./pages/owner/OwnerOutlet.jsx";
+import OwnerProfile from "./pages/owner/OwnerProfile.jsx";
+import ManageMenu from "./pages/owner/ManageMenu.jsx";
 
 // Manager pages
-import ManagerDashboard from "./pages/ManagerDashboard.jsx";
-import ManagerOutlet from "./pages/ManagerOutlet.jsx";
+import ManagerDashboard from "./pages/manager/ManagerDashboard.jsx";
+import ManagerOutlet from "./pages/manager/ManagerOutlet.jsx";
 
 // Legacy pages (keeping for compatibility)
 import Home from "./pages/Home.jsx";
