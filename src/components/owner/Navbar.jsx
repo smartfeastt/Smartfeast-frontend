@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Grid, LogOut, ShoppingCart } from 'react-feather'
-import { useCart } from '../context/CartContext'
+import { useCart } from '../../context/CartContext'
 
 export default function Navbar({ title = 'QRMenu', right, backTo }) {
   const { count } = useCart()

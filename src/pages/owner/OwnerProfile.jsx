@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { ArrowLeft, LogOut } from 'react-feather'
+import Header from '../../components/owner/Header.jsx'
 
 export default function OwnerProfile() {
   const { user, logout } = useAuth()
@@ -14,11 +15,12 @@ export default function OwnerProfile() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-black text-white shadow">
+      <Header/>
+      <header>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <button
             onClick={() => navigate('/owner/dashboard')}
-            className="text-sm text-gray-300 hover:text-white mb-2 inline-flex items-center gap-1"
+            className="text-sm text-black-300 hover:text-white mb-2 inline-flex items-center gap-1"
           >
             <ArrowLeft size={16} />
             Back to Dashboard

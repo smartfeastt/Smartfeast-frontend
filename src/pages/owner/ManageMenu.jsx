@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { Plus, Edit, Trash2, ArrowLeft, Upload } from 'react-feather'
+import Header from '../../components/owner/Header.jsx'
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -201,6 +202,7 @@ export default function ManageMenu() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <Header/>
       <header className="bg-black text-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <button

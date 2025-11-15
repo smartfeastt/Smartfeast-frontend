@@ -1,8 +1,10 @@
 import { Link } from 'react-router-dom'
-import { Search } from 'react-feather'
-
+import Footer from '../../components/global/Footer'
+import Header from '../../components/global/Header'
 export default function Landing() {
   return (
+    <>
+    <Header/>
     <div className="min-h-screen bg-white">
       {/* Hero Section */}
       <div className="bg-gradient-to-br from-gray-900 to-black text-white">
@@ -70,14 +72,16 @@ export default function Landing() {
             Contact SmartFeast admin to get your credentials and start managing your restaurants today.
           </p>
           <Link
-            to="/login"
+            to="/signin"
             className="bg-white text-black px-8 py-3 rounded-md font-semibold hover:bg-gray-100 transition inline-block"
           >
             Sign In
           </Link>
         </div>
       </div>
+      <Footer/>
     </div>
+    </>
   )
 }
 

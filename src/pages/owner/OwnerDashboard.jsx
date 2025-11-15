@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { Plus, MapPin,Settings, LogOut } from 'react-feather'
 import { Building2 } from 'lucide-react';
-
+import Header from '../../components/owner/Header.jsx'
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -79,11 +79,7 @@ useEffect(() => {
     }
   }
 
-  const handleLogout = () => {
-    logout()
-    navigate('/login')
-  }
-
+  
   
   if (loading || authLoading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>
@@ -93,29 +89,7 @@ useEffect(() => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-black text-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold">SmartFeast - Owner Dashboard</h1>
-            <div className="flex items-center gap-4">
-              <span className="text-sm">{user?.email}</span>
-              <button
-                onClick={() => navigate('/owner/profile')}
-                className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded"
-              >
-                Profile
-              </button>
-              <button
-                onClick={handleLogout}
-                className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded flex items-center gap-2"
-              >
-                <LogOut size={16} />
-                Logout
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+      <Header/>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Create Restaurant Button */}

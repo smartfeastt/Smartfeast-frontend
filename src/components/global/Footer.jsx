@@ -35,7 +35,7 @@ export default function Footer() {
           </div>
         </div>
         <div className="mt-8 pt-8 border-t border-gray-200 text-sm text-gray-500 text-center">
-          <p>© 2023 QRMenu. All rights reserved.</p>
+          <p>© 2025 Smartfeast. All rights reserved.</p>
         </div>
       </div>
     </footer>
