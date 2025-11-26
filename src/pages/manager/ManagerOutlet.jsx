@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { ArrowLeft } from 'react-feather'
+import DynamicHeader from '../../components/headers/DynamicHeader.jsx'
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -44,21 +45,24 @@ export default function ManagerOutlet() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-black text-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <DynamicHeader />
+      
+      {/* Breadcrumb */}
+      <div className="bg-white border-b">
+        <div className="max-w-7xl mx-auto px-4 py-4">
           <button
             onClick={() => navigate('/manager/dashboard')}
-            className="text-sm text-gray-300 hover:text-white mb-2 inline-flex items-center gap-1"
+            className="text-sm text-gray-600 hover:text-gray-900 mb-2 inline-flex items-center gap-1"
           >
             <ArrowLeft size={16} />
             Back to Dashboard
           </button>
-          <h1 className="text-2xl font-bold">{outlet.name}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{outlet.name}</h1>
           {outlet.restaurantId && (
-            <p className="text-gray-300 text-sm">{outlet.restaurantId.name}</p>
+            <p className="text-gray-600 text-sm">{outlet.restaurantId.name}</p>
           )}
         </div>
-      </header>
+      </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { ArrowLeft, LogOut } from 'react-feather'
-import Header from '../../components/owner/Header.jsx'
+import DynamicHeader from '../../components/headers/DynamicHeader.jsx'
 
 export default function OwnerProfile() {
   const { user, logout } = useAuth()
@@ -15,19 +15,21 @@ export default function OwnerProfile() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header/>
-      <header>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <DynamicHeader />
+      
+      {/* Breadcrumb */}
+      <div className="bg-white border-b">
+        <div className="max-w-7xl mx-auto px-4 py-4">
           <button
             onClick={() => navigate('/owner/dashboard')}
-            className="text-sm text-black-300 hover:text-white mb-2 inline-flex items-center gap-1"
+            className="text-sm text-gray-600 hover:text-gray-900 mb-2 inline-flex items-center gap-1"
           >
             <ArrowLeft size={16} />
             Back to Dashboard
           </button>
-          <h1 className="text-2xl font-bold">Profile</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Profile</h1>
         </div>
-      </header>
+      </div>
 
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-white rounded-lg shadow p-6">

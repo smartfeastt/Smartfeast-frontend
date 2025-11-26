@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { MapPin, ArrowRight } from 'react-feather'
+import { MapPin, ArrowRight, ArrowLeft, ShoppingCart, User, LogOut } from 'react-feather'
+import { useAuth } from '../context/AuthContext.jsx'
+import { useCart } from '../context/CartContext.jsx'
+import Cart from '../components/Cart.jsx'
+import DynamicHeader from '../components/headers/DynamicHeader.jsx'
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -8,6 +12,8 @@ export default function ViewRestaurant() {
   const { restaurantName } = useParams()
   const [restaurant, setRestaurant] = useState(null)
   const [loading, setLoading] = useState(true)
+  const { user, logout } = useAuth()
+  const { getTotalItems, toggleCart } = useCart()
 
   useEffect(() => {
     fetchRestaurant()
@@ -44,14 +50,27 @@ export default function ViewRestaurant() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-black text-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <Link to="/" className="text-sm text-gray-300 hover:text-white mb-2 inline-block">
-            ← Back to Home
+      <DynamicHeader />
+      
+      {/* Breadcrumb */}
+      <div className="bg-white border-b">
+        <div className="max-w-7xl mx-auto px-4 py-3">
+          <Link
+            to="/"
+            className="text-sm text-gray-600 hover:text-gray-900 inline-flex items-center gap-1"
+          >
+            <ArrowLeft size={16} />
+            Back to Home
           </Link>
-          <h1 className="text-3xl font-bold">{restaurant.name}</h1>
         </div>
-      </header>
+      </div>
+      
+      {/* Restaurant Header */}
+      <div className="bg-white">
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <h1 className="text-3xl font-bold text-gray-900">{restaurant.name}</h1>
+        </div>
+      </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <h2 className="text-2xl font-bold mb-6">Outlets</h2>
@@ -84,6 +103,9 @@ export default function ViewRestaurant() {
           </div>
         )}
       </div>
+
+      {/* Cart Sidebar */}
+      <Cart />
     </div>
   )
 }

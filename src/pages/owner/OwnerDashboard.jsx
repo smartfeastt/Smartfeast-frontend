@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { Plus, MapPin,Settings, LogOut } from 'react-feather'
 import { Building2 } from 'lucide-react';
-import Header from '../../components/owner/Header.jsx'
+import DynamicHeader from '../../components/headers/DynamicHeader.jsx'
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -88,8 +88,7 @@ useEffect(() => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <Header/>
+      <DynamicHeader />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Create Restaurant Button */}

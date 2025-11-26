@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { Plus, Users, ArrowLeft, UserPlus, X } from 'react-feather'
-import Header from '../../components/owner/Header.jsx'
+import DynamicHeader from '../../components/headers/DynamicHeader.jsx'
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -64,7 +64,7 @@ export default function OwnerOutlet() {
   const handleAssignManager = async (e) => {
     e.preventDefault()
     try {
-      const response = await fetch(`${API_URL}/outlet/${outletId}/assign-manager`, {
+      const response = await fetch(`${API_URL}/api/outlet/${outletId}/assign-manager`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -92,7 +92,7 @@ export default function OwnerOutlet() {
     if (!confirm('Are you sure you want to remove this manager?')) return
     
     try {
-      const response = await fetch(`${API_URL}/outlet/${outletId}/remove-manager/${managerId}`, {
+      const response = await fetch(`${API_URL}/api/outlet/${outletId}/remove-manager/${managerId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
@@ -119,19 +119,21 @@ export default function OwnerOutlet() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header/>
-      <header>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <DynamicHeader />
+      
+      {/* Breadcrumb */}
+      <div className="bg-white border-b">
+        <div className="max-w-7xl mx-auto px-4 py-4">
           <button
             onClick={() => navigate(`/owner/restaurant/${outlet.restaurantId?._id || outlet.restaurantId}`)}
-            className="text-sm text-black-300 hover:text-white mb-2 inline-flex items-center gap-1"
+            className="text-sm text-gray-600 hover:text-gray-900 mb-2 inline-flex items-center gap-1"
           >
             <ArrowLeft size={16} />
             Back to Restaurant
           </button>
-          <h1 className="text-2xl font-bold">{outlet.name}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{outlet.name}</h1>
         </div>
-      </header>
+      </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Managers Section */}

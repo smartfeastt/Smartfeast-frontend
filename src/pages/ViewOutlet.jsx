@@ -1,35 +1,33 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Star, Clock, Search } from "react-feather";
+import { ArrowLeft, Star, Clock, Search, ShoppingCart, Plus } from "react-feather";
 import { useAuth } from "../context/AuthContext.jsx";
+import { useCart } from "../context/CartContext.jsx";
+import Cart from "../components/Cart.jsx";
+import DynamicHeader from "../components/headers/DynamicHeader.jsx";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
 export default function ViewOutlet() {
   const { restaurantName, outletName } = useParams();
   const { token } = useAuth();
+  const { addToCart, getTotalItems, toggleCart } = useCart();
 
   // -------------------------------
   // ALL HOOKS (ALWAYS IN SAME ORDER)
   // -------------------------------
   const [items, setItems] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [outlet, setOutlet] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const [active, setActive] = useState("All");
 
-  const tabs = [
-    "All",
-    "Coffee",
-    "Tea",
-    "Milkshakes",
-    "Mojitos",
-    "Snacks",
-    "Sandwiches",
-    "Burgers",
-    "Pizzas",
-    "Desserts",
-  ];
+  // Dynamic tabs based on categories
+  const tabs = useMemo(() => {
+    const categoryTabs = categories.map(cat => cat.name);
+    return ["All", ...categoryTabs];
+  }, [categories]);
 
   const [q, setQ] = useState("");
   const [maxPrice, setMaxPrice] = useState(null);
@@ -38,11 +36,12 @@ export default function ViewOutlet() {
   const [diet, setDiet] = useState(new Set());
 
   // -------------------------------
-  // FETCH OUTLET ITEMS
+  // FETCH OUTLET ITEMS AND CATEGORIES
   // -------------------------------
   useEffect(() => {
-    if (token) fetchMenuItems();
-  }, [token, restaurantName, outletName]);
+    fetchMenuItems();
+    fetchCategories();
+  }, [restaurantName, outletName]);
 
   const fetchMenuItems = async () => {
     try {
@@ -52,7 +51,6 @@ export default function ViewOutlet() {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
           },
         }
       );
@@ -67,6 +65,42 @@ export default function ViewOutlet() {
       console.error("Error loading menu:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      // First get outlet ID from the items endpoint, then fetch categories
+      const response = await fetch(
+        `${API_URL}/api/item/view/${restaurantName}/${outletName}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const data = await response.json();
+      if (data.success && data.outlet) {
+        // Now fetch categories for this outlet
+        const catResponse = await fetch(
+          `${API_URL}/api/category/outlet/${data.outlet._id}`,
+          {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }
+        );
+        
+        const catData = await catResponse.json();
+        if (catData.success) {
+          setCategories(catData.categories || []);
+        }
+      }
+    } catch (err) {
+      console.error("Error loading categories:", err);
     }
   };
 
@@ -114,23 +148,20 @@ export default function ViewOutlet() {
   // -------------------------------
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* HEADER (UNCHANGED) */}
-      <header className="bg-black text-white shadow">
-        <div className="max-w-7xl mx-auto px-4 py-6">
+      <DynamicHeader />
+      
+      {/* Breadcrumb */}
+      <div className="bg-white border-b">
+        <div className="max-w-7xl mx-auto px-4 py-3">
           <Link
             to={`/view/${restaurantName}`}
-            className="text-sm text-gray-300 hover:text-white inline-flex items-center gap-1"
+            className="text-sm text-gray-600 hover:text-gray-900 inline-flex items-center gap-1"
           >
             <ArrowLeft size={16} />
             Back to {restaurantName}
           </Link>
-
-          <h1 className="text-3xl font-bold">{`${restaurantName}`}</h1>
-          {outlet?.location && (
-            <p className="text-gray-300 mt-2">{outlet.location}</p>
-          )}
         </div>
-      </header>
+      </div>
 
       {/* BANNER LIKE MENU PAGE */}
       <div className="bg-white">
@@ -278,24 +309,34 @@ export default function ViewOutlet() {
                 <div className="p-4">
                   <h3 className="text-lg font-semibold">{m.itemName}</h3>
                   {m.itemDescription && (
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-gray-600 mb-2">
                       {m.itemDescription}
                     </p>
                   )}
                   <div className="flex justify-between items-center mt-3">
                     <span className="text-lg font-bold">₹{m.itemPrice}</span>
-                    {m.itemQuantity !== undefined && (
-                      <span className="text-sm text-gray-500">
-                        Qty: {m.itemQuantity}
-                      </span>
-                    )}
+                    <button
+                      onClick={() => addToCart(m, 1)}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-black text-white rounded-md hover:bg-gray-800 transition-colors text-sm"
+                    >
+                      <Plus size={16} />
+                      Add to Cart
+                    </button>
                   </div>
+                  {m.itemQuantity !== undefined && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Available: {m.itemQuantity}
+                    </p>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Cart Sidebar */}
+      <Cart />
     </div>
   );
 };

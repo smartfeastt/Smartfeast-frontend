@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { Plus, Edit, Trash2, ArrowLeft, Upload } from 'react-feather'
-import Header from '../../components/owner/Header.jsx'
+import DynamicHeader from '../../components/headers/DynamicHeader.jsx'
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -11,8 +11,10 @@ export default function ManageMenu() {
   const { token } = useAuth()
   const navigate = useNavigate()
   const [items, setItems] = useState([])
+  const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showCategoryModal, setShowCategoryModal] = useState(false)
   const [editingItem, setEditingItem] = useState(null)
   const [formData, setFormData] = useState({
     itemName: '',
@@ -23,10 +25,16 @@ export default function ManageMenu() {
     isAvailable: true,
   })
   const [selectedFile, setSelectedFile] = useState(null)
+  const [categoryForm, setCategoryForm] = useState({
+    name: '',
+    description: '',
+    sortOrder: 0,
+  })
 
   useEffect(() => {
   if (token && outletId) {
     fetchItems()
+    fetchCategories()
   }
 }, [token, outletId])
 
@@ -48,6 +56,24 @@ export default function ManageMenu() {
       console.error('Error fetching items:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/category/outlet/${outletId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      const data = await response.json()
+      if (data.success) {
+        setCategories(data.categories || [])
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error)
     }
   }
 
@@ -188,6 +214,34 @@ export default function ManageMenu() {
     setShowCreateModal(true)
   }
 
+  const handleCreateCategory = async (e) => {
+    e.preventDefault()
+    try {
+      const response = await fetch(`${API_URL}/api/category/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          outletId,
+          ...categoryForm,
+        }),
+      })
+      const data = await response.json()
+      if (data.success) {
+        setShowCategoryModal(false)
+        setCategoryForm({ name: '', description: '', sortOrder: 0 })
+        fetchCategories()
+      } else {
+        alert(data.message || 'Failed to create category')
+      }
+    } catch (error) {
+      console.error('Error creating category:', error)
+      alert('Failed to create category')
+    }
+  }
+
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>
   }
@@ -202,34 +256,45 @@ export default function ManageMenu() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header/>
-      <header className="bg-black text-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <DynamicHeader />
+      
+      {/* Breadcrumb */}
+      <div className="bg-white border-b">
+        <div className="max-w-7xl mx-auto px-4 py-4">
           <button
             onClick={() => navigate(-1)}
-            className="text-sm text-gray-300 hover:text-white mb-2 inline-flex items-center gap-1"
+            className="text-sm text-gray-600 hover:text-gray-900 mb-2 inline-flex items-center gap-1"
           >
             <ArrowLeft size={16} />
             Back
           </button>
-          <h1 className="text-2xl font-bold">Manage Menu</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Manage Menu</h1>
         </div>
-      </header>
+      </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6 flex justify-between items-center">
           <h2 className="text-2xl font-bold text-gray-900">Menu Items</h2>
-          <button
-            onClick={() => {
-              resetForm()
-              setEditingItem(null)
-              setShowCreateModal(true)
-            }}
-            className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800"
-          >
-            <Plus size={20} />
-            Add Item
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowCategoryModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+            >
+              <Plus size={20} />
+              Add Category
+            </button>
+            <button
+              onClick={() => {
+                resetForm()
+                setEditingItem(null)
+                setShowCreateModal(true)
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800"
+            >
+              <Plus size={20} />
+              Add Item
+            </button>
+          </div>
         </div>
 
         {items.length === 0 ? (
@@ -327,13 +392,18 @@ export default function ManageMenu() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Category
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
-                    placeholder="e.g., Beverages, Desserts"
-                  />
+                  >
+                    <option value="">Select a category</option>
+                    {categories.map((cat) => (
+                      <option key={cat._id} value={cat.name}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -389,6 +459,74 @@ export default function ManageMenu() {
                   className="flex-1 px-4 py-2 bg-black text-white rounded hover:bg-gray-800"
                 >
                   {editingItem ? 'Update' : 'Create'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Category Creation Modal */}
+      {showCategoryModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold mb-4">Create New Category</h3>
+            <form onSubmit={handleCreateCategory}>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Category Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={categoryForm.name}
+                    onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
+                    required
+                    placeholder="e.g., Beverages, Desserts"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    value={categoryForm.description}
+                    onChange={(e) => setCategoryForm({ ...categoryForm, description: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
+                    rows="2"
+                    placeholder="Optional description"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Sort Order
+                  </label>
+                  <input
+                    type="number"
+                    value={categoryForm.sortOrder}
+                    onChange={(e) => setCategoryForm({ ...categoryForm, sortOrder: parseInt(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2 mt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCategoryModal(false)
+                    setCategoryForm({ name: '', description: '', sortOrder: 0 })
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-black text-white rounded hover:bg-gray-800"
+                >
+                  Create Category
                 </button>
               </div>
             </form>
