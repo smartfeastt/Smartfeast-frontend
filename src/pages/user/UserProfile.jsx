@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { User, Mail, Phone, MapPin, Edit2, Save, X } from "react-feather";
-import { useAuth } from "../../context/AuthContext.jsx";
+import { useAppSelector } from "../../store/hooks.js";
 import DynamicHeader from "../../components/headers/DynamicHeader.jsx";
 
 export default function UserProfile() {
-  const { user } = useAuth();
+  const { user } = useAppSelector((state) => state.auth);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     name: user?.name || "",

@@ -1,15 +1,17 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../../context/AuthContext.jsx'
+import { useAppSelector, useAppDispatch } from '../../store/hooks.js'
+import { logout } from '../../store/slices/authSlice.js'
 import { ArrowLeft, LogOut } from 'react-feather'
 import DynamicHeader from '../../components/headers/DynamicHeader.jsx'
 
 export default function OwnerProfile() {
-  const { user, logout } = useAuth()
+  const { user } = useAppSelector((state) => state.auth)
+  const dispatch = useAppDispatch()
   const navigate = useNavigate()
 
   const handleLogout = () => {
-    logout()
+    dispatch(logout())
     navigate('/login')
   }
 

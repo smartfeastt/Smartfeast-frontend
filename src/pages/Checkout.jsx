@@ -1,13 +1,14 @@
 import { useState } from "react";
-import { useCart } from "../context/CartContext.jsx";
-import { useAuth } from "../context/AuthContext.jsx";
+import { useAppSelector } from "../store/hooks.js";
+import { selectCartItems, selectTotalPrice } from "../store/slices/cartSlice.js";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, CreditCard, MapPin, User } from "react-feather";
 import DynamicHeader from "../components/headers/DynamicHeader.jsx";
 
 export default function Checkout() {
-  const { cartItems, getTotalPrice, clearCart } = useCart();
-  const { user } = useAuth();
+  const cartItems = useAppSelector(selectCartItems);
+  const totalPrice = useAppSelector(selectTotalPrice);
+  const { user } = useAppSelector((state) => state.auth);
   const navigate = useNavigate();
   
   const [customerInfo, setCustomerInfo] = useState({
@@ -18,7 +19,6 @@ export default function Checkout() {
   });
   
   const [paymentMethod, setPaymentMethod] = useState("card");
-  const [isProcessing, setIsProcessing] = useState(false);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -30,14 +30,55 @@ export default function Checkout() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setIsProcessing(true);
 
-    // Simulate order processing
-    setTimeout(() => {
-      alert("Order placed successfully! You will receive a confirmation email shortly.");
-      clearCart();
-      navigate("/");
-    }, 2000);
+    if (cartItems.length === 0) {
+      alert("Your cart is empty");
+      return;
+    }
+
+    if (!customerInfo.address) {
+      alert("Please enter delivery address");
+      return;
+    }
+
+    // Calculate final total with delivery and tax
+    const deliveryFee = 30;
+    const tax = totalPrice * 0.05;
+    const finalTotal = totalPrice + deliveryFee + tax;
+    
+    // Get outletId from first item
+    const outletId = cartItems[0]?.outletId;
+    if (!outletId) {
+      alert("Invalid cart items. Please add items to cart again.");
+      return;
+    }
+    
+    const orderData = {
+      items: cartItems.map(item => ({
+        itemId: item._id,
+        itemName: item.itemName,
+        itemPrice: item.itemPrice,
+        quantity: item.quantity,
+        itemPhoto: item.itemPhoto,
+        outletId: item.outletId || outletId,
+      })),
+      totalPrice: finalTotal,
+      deliveryAddress: customerInfo.address,
+      paymentMethod: paymentMethod,
+    };
+
+    const paymentData = {
+      paymentMethod: paymentMethod,
+      customerInfo: customerInfo,
+    };
+
+    // Redirect to payment page
+    navigate("/payment", {
+      state: {
+        orderData,
+        paymentData,
+      }
+    });
   };
 
   if (cartItems.length === 0) {
@@ -187,10 +228,9 @@ export default function Checkout() {
 
               <button
                 type="submit"
-                disabled={isProcessing}
-                className="w-full bg-black text-white py-3 rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-black text-white py-3 rounded-md hover:bg-gray-800 transition-colors"
               >
-                {isProcessing ? "Processing..." : `Place Order - ₹${getTotalPrice().toFixed(2)}`}
+                Proceed to Payment - ₹{(totalPrice + 30 + (totalPrice * 0.05)).toFixed(2)}
               </button>
             </form>
           </div>
@@ -225,7 +265,7 @@ export default function Checkout() {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span>Subtotal:</span>
-                <span>₹{getTotalPrice().toFixed(2)}</span>
+                <span>₹{totalPrice.toFixed(2)}</span>
               </div>
               <div className="flex justify-between">
                 <span>Delivery Fee:</span>
@@ -233,12 +273,12 @@ export default function Checkout() {
               </div>
               <div className="flex justify-between">
                 <span>Tax (5%):</span>
-                <span>₹{(getTotalPrice() * 0.05).toFixed(2)}</span>
+                <span>₹{(totalPrice * 0.05).toFixed(2)}</span>
               </div>
               <hr className="my-2" />
               <div className="flex justify-between text-lg font-semibold">
                 <span>Total:</span>
-                <span>₹{(getTotalPrice() + 30 + (getTotalPrice() * 0.05)).toFixed(2)}</span>
+                <span>₹{(totalPrice + 30 + (totalPrice * 0.05)).toFixed(2)}</span>
               </div>
             </div>
           </div>

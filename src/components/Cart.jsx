@@ -1,17 +1,21 @@
 import { X, Plus, Minus, ShoppingBag } from "react-feather";
-import { useCart } from "../context/CartContext.jsx";
+import { useAppSelector, useAppDispatch } from "../store/hooks.js";
+import { 
+  removeFromCart, 
+  updateQuantity, 
+  clearCart, 
+  setCartOpen,
+  selectCartItems,
+  selectCartOpen,
+  selectTotalPrice
+} from "../store/slices/cartSlice.js";
 import { Link } from "react-router-dom";
 
 export default function Cart() {
-  const {
-    cartItems,
-    removeFromCart,
-    updateQuantity,
-    clearCart,
-    getTotalPrice,
-    isCartOpen,
-    setIsCartOpen,
-  } = useCart();
+  const cartItems = useAppSelector(selectCartItems);
+  const isCartOpen = useAppSelector(selectCartOpen);
+  const totalPrice = useAppSelector(selectTotalPrice);
+  const dispatch = useAppDispatch();
 
   if (!isCartOpen) return null;
 
@@ -20,7 +24,7 @@ export default function Cart() {
       {/* Overlay */}
       <div
         className="fixed inset-0 bg-black bg-opacity-50 z-40"
-        onClick={() => setIsCartOpen(false)}
+        onClick={() => dispatch(setCartOpen(false))}
       />
 
       {/* Cart Sidebar */}
@@ -32,7 +36,7 @@ export default function Cart() {
             Your Cart ({cartItems.length})
           </h2>
           <button
-            onClick={() => setIsCartOpen(false)}
+            onClick={() => dispatch(setCartOpen(false))}
             className="p-1 hover:bg-gray-100 rounded"
           >
             <X size={20} />
@@ -65,7 +69,7 @@ export default function Cart() {
                       {/* Quantity Controls */}
                       <div className="flex items-center gap-2 mt-2">
                         <button
-                          onClick={() => updateQuantity(item._id, item.quantity - 1)}
+                          onClick={() => dispatch(updateQuantity({ itemId: item._id, quantity: item.quantity - 1 }))}
                           className="p-1 hover:bg-gray-100 rounded"
                         >
                           <Minus size={14} />
@@ -74,13 +78,13 @@ export default function Cart() {
                           {item.quantity}
                         </span>
                         <button
-                          onClick={() => updateQuantity(item._id, item.quantity + 1)}
+                          onClick={() => dispatch(updateQuantity({ itemId: item._id, quantity: item.quantity + 1 }))}
                           className="p-1 hover:bg-gray-100 rounded"
                         >
                           <Plus size={14} />
                         </button>
                         <button
-                          onClick={() => removeFromCart(item._id)}
+                          onClick={() => dispatch(removeFromCart(item._id))}
                           className="ml-auto text-red-500 hover:text-red-700 text-sm"
                         >
                           Remove
@@ -104,19 +108,19 @@ export default function Cart() {
           <div className="border-t p-4 space-y-4">
             <div className="flex justify-between items-center text-lg font-semibold">
               <span>Total:</span>
-              <span>₹{getTotalPrice().toFixed(2)}</span>
+              <span>₹{totalPrice.toFixed(2)}</span>
             </div>
             
             <div className="space-y-2">
               <Link
                 to="/checkout"
                 className="w-full bg-black text-white py-3 rounded-md hover:bg-gray-800 transition-colors text-center block"
-                onClick={() => setIsCartOpen(false)}
+                onClick={() => dispatch(setCartOpen(false))}
               >
                 Proceed to Checkout
               </Link>
               <button
-                onClick={clearCart}
+                onClick={() => dispatch(clearCart())}
                 className="w-full border border-gray-300 py-2 rounded-md hover:bg-gray-50 transition-colors"
               >
                 Clear Cart

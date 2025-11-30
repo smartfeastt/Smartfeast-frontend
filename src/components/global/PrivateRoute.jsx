@@ -1,24 +1,10 @@
-﻿import { useAuth } from "../../context/AuthContext.jsx";
-import { useEffect, useState } from "react";
+﻿import { useAppSelector } from "../../store/hooks.js";
 import { Navigate, Outlet } from "react-router-dom";
 
 const ProtectedRoute = ({ role }) => {
-    const [isAuthenticated, setIsAuthenticated] = useState(null);
-    const { user,loading } = useAuth();
-
-    useEffect(() => {
-
-        const checkAuth = () => {
-          if(!loading){
-            console.log(user);
-            const type=user.type;
-            setIsAuthenticated(type===role);
-          }
-        };
-        checkAuth();
-    }, [loading]);
-
-    if (isAuthenticated === null) {
+    const { user, loading } = useAppSelector((state) => state.auth);
+    
+    if (loading) {
         return (
             <div className="flex items-center justify-center h-screen bg-white">
               <div className="relative w-12 h-12 animate-spin-custom">
@@ -31,6 +17,7 @@ const ProtectedRoute = ({ role }) => {
           );
     }
 
+    const isAuthenticated = user && user.type === role;
     return isAuthenticated ? <Outlet /> : <Navigate to="/error" />;
 };
 

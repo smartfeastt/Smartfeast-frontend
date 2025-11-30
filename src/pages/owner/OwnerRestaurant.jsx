@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useAuth } from '../../context/AuthContext.jsx'
+import { useAppSelector } from '../../store/hooks.js'
 import { Plus, MapPin, Users, ArrowLeft } from 'react-feather'
 import DynamicHeader from '../../components/headers/DynamicHeader.jsx'
 
@@ -8,7 +8,7 @@ const API_URL = import.meta.env.VITE_API_URL;
 
 export default function OwnerRestaurant() {
   const { restaurantId } = useParams()
-  const { token } = useAuth()
+  const { token } = useAppSelector((state) => state.auth)
   const navigate = useNavigate()
   const [restaurant, setRestaurant] = useState(null)
   const [outlets, setOutlets] = useState([])

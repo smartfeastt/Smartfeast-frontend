@@ -1,16 +1,18 @@
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../../context/AuthContext.jsx'
+import { useAppSelector, useAppDispatch } from '../../store/hooks.js'
+import { logout } from '../../store/slices/authSlice.js'
 import { useState, useEffect } from 'react'
 import { LogOut } from "lucide-react";
 
 
 const Header = ()=>{
   const navigate = useNavigate()
-  const { user, token, loading: authLoading, logout } = useAuth()
+  const { user, token, loading: authLoading } = useAppSelector((state) => state.auth)
+  const dispatch = useAppDispatch()
   const [loading, setLoading] = useState(true)
 
   const handleLogout = () => {
-    logout()
+    dispatch(logout())
     navigate('/login')
   }
   

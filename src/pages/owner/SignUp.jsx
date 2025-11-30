@@ -1,61 +1,66 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { useAppDispatch } from "../../store/hooks.js";
-import { setAuth } from "../../store/slices/authSlice.js";
-import { Eye, EyeOff, Mail, Lock, User, ArrowLeft } from "react-feather";
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { useAppDispatch } from '../../store/hooks.js'
+import { setAuth } from '../../store/slices/authSlice.js'
+import { Eye, EyeOff, Mail, Lock, User, ArrowLeft } from 'react-feather'
+import { Building2 } from "lucide-react";
 
-const API_URL = import.meta.env.VITE_API_URL;
 
-export default function UserSignUp() {
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
-  });
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
-  const dispatch = useAppDispatch();
-  const navigate = useNavigate();
-
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-    setError("");
-  };
+export default function VendorSignUp() {
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [type, setType] = useState('Owner')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const dispatch = useAppDispatch()
+  const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
+    e.preventDefault()
+    setError('')
 
-    // Validate passwords match
-    if (formData.password !== formData.confirmPassword) {
-      setError("Passwords do not match");
-      setLoading(false);
-      return;
+    // Validation
+    if (!name.trim()) {
+      setError('Name is required')
+      return
     }
+
+    if (!email.trim()) {
+      setError('Email is required')
+      return
+    }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters')
+      return
+    }
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match')
+      return
+    }
+
+    setLoading(true)
 
     try {
       const response = await fetch(`${API_URL}/api/auth/signup`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          password: formData.password,
-          type: "User",
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
+          password,
+          type,
         }),
-      });
+      })
 
-      const data = await response.json();
+      const data = await response.json()
 
       if (data.success) {
         // Parse JWT token to get user data
@@ -72,21 +77,31 @@ export default function UserSignUp() {
           userId: decoded.userId,
           email: decoded.email,
           type: decoded.type,
-          name: decoded.name || formData.name,
+          name: decoded.name || name,
+          ownedRestaurants: decoded.ownedRestaurants || [],
+          managedOutlets: decoded.managedOutlets || [],
         };
 
-        dispatch(setAuth({ token: data.token, user: userData }));
-        
-        navigate("/");
+        dispatch(setAuth({ token: data.token, user: userData }))
+
+        // Redirect based on user type
+        if (data.user.type === 'owner') {
+          navigate('/owner/dashboard')
+        } else if (data.user.type === 'manager') {
+          navigate('/manager/dashboard')
+        } else {
+          navigate('/')
+        }
       } else {
-        setError(data.message || "Registration failed");
+        setError(data.message || 'Registration failed')
       }
     } catch (error) {
-      setError("Network error. Please try again.");
+      console.error('Signup error:', error)
+      setError('Network error. Please try again.')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
@@ -103,8 +118,11 @@ export default function UserSignUp() {
         {/* Sign Up Form */}
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Join SmartFeast!</h1>
-            <p className="text-gray-600">Create your account to start ordering delicious food</p>
+            <div className="flex justify-center mb-4">
+              <Building2 size={48} className="text-gray-900" />
+            </div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Business Sign Up</h1>
+            <p className="text-gray-600">Create your business account to manage restaurants</p>
           </div>
 
           {error && (
@@ -116,18 +134,34 @@ export default function UserSignUp() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
+                Account Type
+              </label>
+              <div className="relative">
+                <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                <select
+                  value={type}
+                  onChange={(e) => setType(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors appearance-none bg-white"
+                >
+                  <option value="Owner">Restaurant Owner</option>
+                  <option value="Manager">Manager</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Full Name
               </label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                 <input
                   type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
                   placeholder="Enter your full name"
+                  required
                 />
               </div>
             </div>
@@ -140,12 +174,11 @@ export default function UserSignUp() {
                 <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                 <input
                   type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
                   placeholder="Enter your email"
+                  required
                 />
               </div>
             </div>
@@ -158,13 +191,12 @@ export default function UserSignUp() {
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                 <input
                   type={showPassword ? "text" : "password"}
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  required
-                  minLength="6"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
-                  placeholder="Create a password"
+                  placeholder="At least 6 characters"
+                  required
+                  minLength={6}
                 />
                 <button
                   type="button"
@@ -184,12 +216,12 @@ export default function UserSignUp() {
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                 <input
                   type={showConfirmPassword ? "text" : "password"}
-                  name="confirmPassword"
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
                   className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
                   placeholder="Confirm your password"
+                  required
+                  minLength={6}
                 />
                 <button
                   type="button"
@@ -206,7 +238,7 @@ export default function UserSignUp() {
               disabled={loading}
               className="w-full bg-black text-white py-3 rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
             >
-              {loading ? "Creating Account..." : "Create Account"}
+              {loading ? "Creating Account..." : "Create Business Account"}
             </button>
           </form>
 
@@ -214,7 +246,7 @@ export default function UserSignUp() {
             <p className="text-gray-600">
               Already have an account?{" "}
               <Link
-                to="/user/signin"
+                to="/signin"
                 className="text-black font-medium hover:underline"
               >
                 Sign in here
@@ -224,17 +256,18 @@ export default function UserSignUp() {
 
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-500">
-              Want to list your restaurant?{" "}
+              Are you a customer?{" "}
               <Link
-                to="/signup"
+                to="/user/signup"
                 className="text-black font-medium hover:underline"
               >
-                Business Sign Up
+                User Sign Up
               </Link>
             </p>
           </div>
         </div>
       </div>
     </div>
-  );
+  )
 }
+

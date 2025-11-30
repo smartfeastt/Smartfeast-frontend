@@ -18,18 +18,21 @@ import {
 import { Store } from "lucide-react";
 
 
-import { useAuth } from "../../context/AuthContext.jsx";
-import { useCart } from "../../context/CartContext.jsx";
+import { useAppSelector, useAppDispatch } from "../../store/hooks.js";
+import { logout } from "../../store/slices/authSlice.js";
+import { selectTotalItems } from "../../store/slices/cartSlice.js";
 
 export default function DynamicHeader() {
-  const { user, logout } = useAuth();
-  const { getTotalItems, toggleCart } = useCart();
+  const { user } = useAppSelector((state) => state.auth);
+  const totalItems = useAppSelector(selectTotalItems);
+  const dispatch = useAppDispatch();
+  
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    logout();
+    dispatch(logout());
     navigate("/");
   };
 
@@ -44,17 +47,17 @@ export default function DynamicHeader() {
             </Link>
             
             <div className="flex items-center gap-4">
-              <button
-                onClick={toggleCart}
+              <Link
+                to="/cart"
                 className="relative p-2 text-gray-600 hover:text-gray-900 transition-colors"
               >
                 <ShoppingCart size={24} />
-                {getTotalItems() > 0 && (
+                {totalItems > 0 && (
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                    {getTotalItems()}
+                    {totalItems}
                   </span>
                 )}
-              </button>
+              </Link>
               <Link
                 to="/user/signin"
                 className="px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
@@ -100,17 +103,17 @@ export default function DynamicHeader() {
             </nav>
             
             <div className="flex items-center gap-4">
-              <button
-                onClick={toggleCart}
+              <Link
+                to="/cart"
                 className="relative p-2 text-gray-600 hover:text-gray-900 transition-colors"
               >
                 <ShoppingCart size={24} />
-                {getTotalItems() > 0 && (
+                {totalItems > 0 && (
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                    {getTotalItems()}
+                    {totalItems}
                   </span>
                 )}
-              </button>
+              </Link>
               
               {/* Profile Dropdown */}
               <div className="relative">

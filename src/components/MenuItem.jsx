@@ -1,16 +1,17 @@
 ﻿import { useState } from "react"
-import { useCart } from "../context/CartContext"
+import { useAppDispatch } from "../store/hooks.js"
+import { addToCart } from "../store/slices/cartSlice.js"
 import OptionsModal from "./OptionsModal"
 
 export default function MenuItem({ title, desc, price, img, options }) {
-  const { add } = useCart()
+  const dispatch = useAppDispatch()
   const [open, setOpen] = useState(false)
 
-  const addSimple = () => add({ title, desc, price, img })
+  const addSimple = () => dispatch(addToCart({ item: { title, desc, price, img, itemName: title, itemPrice: price, itemPhoto: img }, quantity: 1 }))
 
   const addWithOptions = ({ optionsSelected }) => {
     const lineId = JSON.stringify({ title, options: optionsSelected })
-    add({ title, desc, price, img, options, optionsSelected, lineId })
+    dispatch(addToCart({ item: { title, desc, price, img, options, optionsSelected, lineId, itemName: title, itemPrice: price, itemPhoto: img }, quantity: 1 }))
   }
 
   return (

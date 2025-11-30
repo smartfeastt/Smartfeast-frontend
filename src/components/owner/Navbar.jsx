@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom'
 import { Grid, LogOut, ShoppingCart } from 'react-feather'
-import { useCart } from '../../context/CartContext'
+import { useAppSelector } from '../../store/hooks.js'
+import { selectTotalItems } from '../../store/slices/cartSlice.js'
 
 export default function Navbar({ title = 'QRMenu', right, backTo }) {
-  const { count } = useCart()
+  const count = useAppSelector(selectTotalItems)
   return (
     <nav className="bg-white shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

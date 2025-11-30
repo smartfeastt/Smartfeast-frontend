@@ -1,17 +1,16 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Star, Clock, Search, ShoppingCart, Plus } from "react-feather";
-import { useAuth } from "../context/AuthContext.jsx";
-import { useCart } from "../context/CartContext.jsx";
-import Cart from "../components/Cart.jsx";
+import { ArrowLeft, Star, Clock, Search, Plus } from "react-feather";
+import { useAppSelector, useAppDispatch } from "../store/hooks.js";
+import { addToCart } from "../store/slices/cartSlice.js";
 import DynamicHeader from "../components/headers/DynamicHeader.jsx";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
 export default function ViewOutlet() {
   const { restaurantName, outletName } = useParams();
-  const { token } = useAuth();
-  const { addToCart, getTotalItems, toggleCart } = useCart();
+  const { token } = useAppSelector((state) => state.auth);
+  const dispatch = useAppDispatch();
 
   // -------------------------------
   // ALL HOOKS (ALWAYS IN SAME ORDER)
@@ -23,11 +22,22 @@ export default function ViewOutlet() {
 
   const [active, setActive] = useState("All");
 
-  // Dynamic tabs based on categories
+  // Dynamic tabs based on categories from both Category model and actual items
   const tabs = useMemo(() => {
-    const categoryTabs = categories.map(cat => cat.name);
+    // Get category names from Category model
+    const categoryNames = new Set(categories.map(cat => cat.name.trim()));
+    
+    // Also get unique categories from items
+    items.forEach(item => {
+      if (item.category && item.category.trim()) {
+        categoryNames.add(item.category.trim());
+      }
+    });
+    
+    // Convert to array and sort
+    const categoryTabs = Array.from(categoryNames).sort();
     return ["All", ...categoryTabs];
-  }, [categories]);
+  }, [categories, items]);
 
   const [q, setQ] = useState("");
   const [maxPrice, setMaxPrice] = useState(null);
@@ -39,53 +49,12 @@ export default function ViewOutlet() {
   // FETCH OUTLET ITEMS AND CATEGORIES
   // -------------------------------
   useEffect(() => {
-    fetchMenuItems();
-    fetchCategories();
-  }, [restaurantName, outletName]);
-
-  const fetchMenuItems = async () => {
-    try {
-      const response = await fetch(
-        `${API_URL}/api/item/view/${restaurantName}/${outletName}`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      const data = await response.json();
-
-      if (data.success) {
-        setItems(data.items || []);
-        setOutlet(data.outlet || null);
-      }
-    } catch (err) {
-      console.error("Error loading menu:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchCategories = async () => {
-    try {
-      // First get outlet ID from the items endpoint, then fetch categories
-      const response = await fetch(
-        `${API_URL}/api/item/view/${restaurantName}/${outletName}`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      const data = await response.json();
-      if (data.success && data.outlet) {
-        // Now fetch categories for this outlet
-        const catResponse = await fetch(
-          `${API_URL}/api/category/outlet/${data.outlet._id}`,
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        // Fetch items and outlet
+        const response = await fetch(
+          `${API_URL}/api/item/view/${restaurantName}/${outletName}`,
           {
             method: "GET",
             headers: {
@@ -93,16 +62,55 @@ export default function ViewOutlet() {
             },
           }
         );
-        
-        const catData = await catResponse.json();
-        if (catData.success) {
-          setCategories(catData.categories || []);
+
+        const data = await response.json();
+
+        if (data.success) {
+          setItems(data.items || []);
+          setOutlet(data.outlet || null);
+          
+          // Store outletId in items for cart reference
+          if (data.outlet?._id && data.items) {
+            data.items = data.items.map(item => ({
+              ...item,
+              outletId: data.outlet._id
+            }));
+            setItems(data.items);
+          }
+
+          // Fetch categories if we have outlet ID
+          if (data.outlet?._id) {
+            try {
+              const catResponse = await fetch(
+                `${API_URL}/api/category/outlet/${data.outlet._id}`,
+                {
+                  method: "GET",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                }
+              );
+              
+              const catData = await catResponse.json();
+              if (catData.success) {
+                setCategories(catData.categories || []);
+              }
+            } catch (catErr) {
+              console.error("Error loading categories:", catErr);
+            }
+          }
+        } else {
+          console.error("Failed to load items:", data.message);
         }
+      } catch (err) {
+        console.error("Error loading menu:", err);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error("Error loading categories:", err);
-    }
-  };
+    };
+
+    loadData();
+  }, [restaurantName, outletName]);
 
   // -------------------------------
   // FILTERS & CATEGORIES (HOOK SAFE)
@@ -110,9 +118,11 @@ export default function ViewOutlet() {
   const filteredByCategory = useMemo(() => {
     if (active === "All") return items;
 
-    return items.filter(
-      (m) => (m.category || "Other").toLowerCase() === active.toLowerCase()
-    );
+    return items.filter((m) => {
+      const itemCategory = (m.category || "").trim().toLowerCase();
+      const activeCategory = active.trim().toLowerCase();
+      return itemCategory === activeCategory;
+    });
   }, [active, items]);
 
   const visible = useMemo(() => {
@@ -125,6 +135,35 @@ export default function ViewOutlet() {
       return m.isAvailable !== false;
     });
   }, [filteredByCategory, q, maxPrice, minRating, spicy, diet]);
+
+  // Group visible items by category
+  const itemsByCategory = useMemo(() => {
+    if (visible.length === 0) return {};
+    
+    const grouped = visible.reduce((acc, item) => {
+      // Handle empty, null, or undefined categories
+      let category = item.category;
+      if (!category || typeof category !== 'string' || category.trim() === '') {
+        category = "Other";
+      } else {
+        category = category.trim();
+      }
+      
+      if (!acc[category]) acc[category] = [];
+      acc[category].push(item);
+      return acc;
+    }, {});
+    
+    // Sort categories alphabetically when "All" is selected
+    if (active === "All") {
+      const sorted = {};
+      Object.keys(grouped).sort().forEach(key => {
+        sorted[key] = grouped[key];
+      });
+      return sorted;
+    }
+    return grouped;
+  }, [visible, active]);
 
   const toggleDiet = (key) =>
     setDiet((s) => {
@@ -286,57 +325,70 @@ export default function ViewOutlet() {
         </div>
       </div>
 
-      {/* GRID */}
+      {/* GRID - Grouped by Category */}
       <div className="max-w-7xl mx-auto px-4 py-8">
-        {visible.length === 0 ? (
+        {items.length === 0 && !loading ? (
           <div className="text-center text-gray-500 py-20">
-            No items found.
+            <p className="text-lg">No menu items available.</p>
+          </div>
+        ) : visible.length === 0 ? (
+          <div className="text-center text-gray-500 py-20">
+            <p className="text-lg">No items match your filters.</p>
+            <p className="text-sm mt-2">Try adjusting your search or filter criteria.</p>
+          </div>
+        ) : Object.keys(itemsByCategory).length === 0 ? (
+          <div className="text-center text-gray-500 py-20">
+            <p className="text-lg">No items to display.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {visible.map((m) => (
-              <div
-                key={m._id}
-                className="bg-white rounded-lg shadow hover:shadow-lg transition overflow-hidden"
-              >
-                {m.itemPhoto && (
-                  <img
-                    src={m.itemPhoto}
-                    alt={m.itemName}
-                    className="w-full h-48 object-cover"
-                  />
-                )}
-                <div className="p-4">
-                  <h3 className="text-lg font-semibold">{m.itemName}</h3>
-                  {m.itemDescription && (
-                    <p className="text-sm text-gray-600 mb-2">
-                      {m.itemDescription}
-                    </p>
-                  )}
-                  <div className="flex justify-between items-center mt-3">
-                    <span className="text-lg font-bold">₹{m.itemPrice}</span>
-                    <button
-                      onClick={() => addToCart(m, 1)}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-black text-white rounded-md hover:bg-gray-800 transition-colors text-sm"
-                    >
-                      <Plus size={16} />
-                      Add to Cart
-                    </button>
+          Object.entries(itemsByCategory).map(([category, categoryItems]) => (
+            <div key={category} className="mb-12">
+              <h2 className="text-2xl font-bold mb-6 text-gray-900 border-b pb-2">
+                {category}
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {categoryItems.map((m) => (
+                  <div
+                    key={m._id}
+                    className="bg-white rounded-lg shadow hover:shadow-lg transition overflow-hidden"
+                  >
+                    {m.itemPhoto && (
+                      <img
+                        src={m.itemPhoto}
+                        alt={m.itemName}
+                        className="w-full h-48 object-cover"
+                      />
+                    )}
+                    <div className="p-4">
+                      <h3 className="text-lg font-semibold">{m.itemName}</h3>
+                      {m.itemDescription && (
+                        <p className="text-sm text-gray-600 mb-2">
+                          {m.itemDescription}
+                        </p>
+                      )}
+                      <div className="flex justify-between items-center mt-3">
+                        <span className="text-lg font-bold">₹{m.itemPrice}</span>
+                        <button
+                          onClick={() => dispatch(addToCart({ item: m, quantity: 1, outletId: outlet?._id }))}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-black text-white rounded-md hover:bg-gray-800 transition-colors text-sm"
+                        >
+                          <Plus size={16} />
+                          Add to Cart
+                        </button>
+                      </div>
+                      {m.itemQuantity !== undefined && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Available: {m.itemQuantity}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  {m.itemQuantity !== undefined && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Available: {m.itemQuantity}
-                    </p>
-                  )}
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+          ))
         )}
       </div>
-
-      {/* Cart Sidebar */}
-      <Cart />
     </div>
   );
 };

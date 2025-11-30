@@ -1,14 +1,18 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useAuth } from '../../context/AuthContext.jsx'
-import { Plus, Users, ArrowLeft, UserPlus, X } from 'react-feather'
+import { useAppSelector, useAppDispatch } from '../../store/hooks.js'
+import { fetchOutletOrders, updateOrderStatus } from '../../store/slices/ordersSlice.js'
+import { Plus, Users, ArrowLeft, UserPlus, X, Package, Clock, CheckCircle } from 'react-feather'
 import DynamicHeader from '../../components/headers/DynamicHeader.jsx'
+import io from 'socket.io-client'
 
 const API_URL = import.meta.env.VITE_API_URL;
 
 export default function OwnerOutlet() {
   const { outletId } = useParams()
-  const { token } = useAuth()
+  const { token } = useAppSelector((state) => state.auth)
+  const { outletOrders, loading: ordersLoading } = useAppSelector((state) => state.orders)
+  const dispatch = useAppDispatch()
   const navigate = useNavigate()
   const [outlet, setOutlet] = useState(null)
   const [items, setItems] = useState([])
@@ -19,8 +23,38 @@ export default function OwnerOutlet() {
 
   useEffect(() => {
     fetchOutlet()
-    // fetchItems()
-  }, [outletId])
+    if (token && outletId) {
+      dispatch(fetchOutletOrders({ outletId, token }))
+    }
+  }, [outletId, token, dispatch])
+
+  // Socket.io for real-time order updates
+  useEffect(() => {
+    if (!token || !outletId) return;
+
+    const socket = io(API_URL, {
+      transports: ['websocket'],
+    });
+
+    socket.on('connect', () => {
+      console.log('Socket connected');
+      socket.emit('join-outlet', outletId);
+    });
+
+    socket.on('new-order', (order) => {
+      console.log('New order received:', order);
+      dispatch(fetchOutletOrders({ outletId, token }));
+    });
+
+    socket.on('order-updated', (order) => {
+      console.log('Order updated:', order);
+      dispatch(fetchOutletOrders({ outletId, token }));
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [outletId, token, dispatch])
 
   const fetchOutlet = async () => {
     try {
@@ -109,6 +143,14 @@ export default function OwnerOutlet() {
     }
   }
 
+  const handleUpdateStatus = async (orderId, status) => {
+    try {
+      await dispatch(updateOrderStatus({ orderId, status, token })).unwrap();
+    } catch (error) {
+      alert(error || 'Failed to update order status');
+    }
+  }
+
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>
   }
@@ -174,7 +216,7 @@ export default function OwnerOutlet() {
         </div>
 
         {/* Menu Items Section */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-lg shadow p-6 mb-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-gray-900">Menu Items</h2>
             <button
@@ -186,6 +228,133 @@ export default function OwnerOutlet() {
             </button>
           </div>
           <p className="text-sm text-gray-600">{items.length} items</p>
+        </div>
+
+        {/* Orders Section */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <Package size={20} />
+              Orders ({outletOrders.length})
+            </h2>
+          </div>
+          
+          {ordersLoading ? (
+            <div className="text-center py-8">Loading orders...</div>
+          ) : outletOrders.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <Package size={48} className="mx-auto mb-4 text-gray-300" />
+              <p>No orders yet</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {outletOrders.map((order) => (
+                <div
+                  key={order._id}
+                  className="border rounded-lg p-4 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-semibold text-gray-900">
+                          Order #{order.orderNumber}
+                        </h3>
+                        <span
+                          className={`px-2 py-1 text-xs rounded-full ${
+                            order.status === 'pending'
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : order.status === 'confirmed'
+                              ? 'bg-blue-100 text-blue-800'
+                              : order.status === 'preparing'
+                              ? 'bg-purple-100 text-purple-800'
+                              : order.status === 'ready'
+                              ? 'bg-green-100 text-green-800'
+                              : order.status === 'delivered'
+                              ? 'bg-gray-100 text-gray-800'
+                              : 'bg-red-100 text-red-800'
+                          }`}
+                        >
+                          {order.status}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-600">
+                        {order.userId?.name || order.userId?.email || 'Customer'}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {new Date(order.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-lg">₹{order.totalPrice.toFixed(2)}</p>
+                      <p className="text-xs text-gray-500">{order.paymentMethod}</p>
+                    </div>
+                  </div>
+
+                  <div className="border-t pt-3 mb-3">
+                    <p className="text-sm font-medium mb-2">Items:</p>
+                    <div className="space-y-1">
+                      {order.items.map((item, idx) => (
+                        <div key={idx} className="flex justify-between text-sm text-gray-600">
+                          <span>
+                            {item.itemName} x {item.quantity}
+                          </span>
+                          <span>₹{(item.itemPrice * item.quantity).toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="border-t pt-3">
+                    <p className="text-sm text-gray-600 mb-2">
+                      <strong>Delivery:</strong> {order.deliveryAddress}
+                    </p>
+                    <div className="flex gap-2">
+                      {order.status === 'pending' && (
+                        <button
+                          onClick={() => handleUpdateStatus(order._id, 'confirmed')}
+                          className="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+                        >
+                          Confirm Order
+                        </button>
+                      )}
+                      {order.status === 'confirmed' && (
+                        <button
+                          onClick={() => handleUpdateStatus(order._id, 'preparing')}
+                          className="flex-1 px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 text-sm"
+                        >
+                          Start Preparing
+                        </button>
+                      )}
+                      {order.status === 'preparing' && (
+                        <button
+                          onClick={() => handleUpdateStatus(order._id, 'ready')}
+                          className="flex-1 px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
+                        >
+                          Mark Ready
+                        </button>
+                      )}
+                      {order.status === 'ready' && (
+                        <button
+                          onClick={() => handleUpdateStatus(order._id, 'out_for_delivery')}
+                          className="flex-1 px-3 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 text-sm"
+                        >
+                          Out for Delivery
+                        </button>
+                      )}
+                      {order.status === 'out_for_delivery' && (
+                        <button
+                          onClick={() => handleUpdateStatus(order._id, 'delivered')}
+                          className="flex-1 px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm"
+                        >
+                          Mark Delivered
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

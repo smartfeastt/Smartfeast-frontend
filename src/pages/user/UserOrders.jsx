@@ -1,57 +1,52 @@
 import { useState, useEffect } from "react";
-import { Package, Clock, CheckCircle, XCircle, Star, RotateCcw } from "react-feather";
+import { Package, Clock, CheckCircle, XCircle, Star, RotateCcw } from "lucide-react";
+import { useAppSelector, useAppDispatch } from "../../store/hooks.js";
+import { fetchUserOrders, selectUserOrders, selectOrdersLoading } from "../../store/slices/ordersSlice.js";
 import DynamicHeader from "../../components/headers/DynamicHeader.jsx";
+import io from 'socket.io-client';
+
+const API_URL = import.meta.env.VITE_API_URL;
 
 export default function UserOrders() {
-  const [orders, setOrders] = useState([]);
+  const { token, user } = useAppSelector((state) => state.auth);
+  const orders = useAppSelector(selectUserOrders);
+  const loading = useAppSelector(selectOrdersLoading);
+  const dispatch = useAppDispatch();
   const [activeTab, setActiveTab] = useState("all");
 
   useEffect(() => {
-    // Mock orders data - in real app, fetch from API
-    const mockOrders = [
-      {
-        id: "ORD001",
-        restaurantName: "Pizza Palace",
-        outletName: "Downtown Branch",
-        items: [
-          { name: "Margherita Pizza", quantity: 1, price: 299 },
-          { name: "Garlic Bread", quantity: 2, price: 99 }
-        ],
-        total: 497,
-        status: "delivered",
-        orderDate: "2024-01-15T10:30:00Z",
-        deliveryDate: "2024-01-15T11:15:00Z",
-        rating: 5
-      },
-      {
-        id: "ORD002",
-        restaurantName: "Burger Hub",
-        outletName: "Mall Road",
-        items: [
-          { name: "Classic Burger", quantity: 2, price: 199 },
-          { name: "French Fries", quantity: 1, price: 89 }
-        ],
-        total: 487,
-        status: "preparing",
-        orderDate: "2024-01-16T14:20:00Z",
-        estimatedDelivery: "2024-01-16T15:00:00Z"
-      },
-      {
-        id: "ORD003",
-        restaurantName: "Cafe Delight",
-        outletName: "City Center",
-        items: [
-          { name: "Cappuccino", quantity: 2, price: 120 },
-          { name: "Chocolate Cake", quantity: 1, price: 180 }
-        ],
-        total: 420,
-        status: "cancelled",
-        orderDate: "2024-01-14T16:45:00Z",
-        cancelReason: "Restaurant unavailable"
-      }
-    ];
-    setOrders(mockOrders);
-  }, []);
+    if (token) {
+      dispatch(fetchUserOrders(token));
+    }
+  }, [token, dispatch]);
+
+  // Socket.io for real-time order updates
+  useEffect(() => {
+    if (!token || !user?.userId) return;
+
+    const socket = io(API_URL, {
+      transports: ['websocket'],
+    });
+
+    socket.on('connect', () => {
+      console.log('Socket connected for orders');
+      socket.emit('join-user', user.userId);
+    });
+
+    socket.on('order-created', (order) => {
+      console.log('New order created:', order);
+      dispatch(fetchUserOrders(token));
+    });
+
+    socket.on('order-updated', (order) => {
+      console.log('Order updated:', order);
+      dispatch(fetchUserOrders(token));
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [token, user?.userId, dispatch]);
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -79,6 +74,7 @@ export default function UserOrders() {
     }
   };
 
+  // Filter orders by active tab (moved after helper functions)
   const filteredOrders = orders.filter(order => {
     if (activeTab === "all") return true;
     return order.status === activeTab;
@@ -86,13 +82,24 @@ export default function UserOrders() {
 
   const handleReorder = (order) => {
     // In real app, add items to cart and redirect to restaurant
-    alert(`Reordering from ${order.restaurantName}...`);
+    alert(`Reordering from ${order.restaurantId?.name || 'Restaurant'}...`);
   };
 
   const handleRateOrder = (orderId) => {
     // In real app, open rating modal
     alert(`Rating order ${orderId}...`);
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <DynamicHeader />
+        <div className="max-w-6xl mx-auto px-4 py-8">
+          <div className="text-center py-12">Loading orders...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -107,7 +114,9 @@ export default function UserOrders() {
             <nav className="flex space-x-8 px-6">
               {[
                 { key: "all", label: "All Orders", count: orders.length },
-                { key: "preparing", label: "Active", count: orders.filter(o => o.status === "preparing").length },
+                { key: "pending", label: "Pending", count: orders.filter(o => o.status === "pending").length },
+                { key: "confirmed", label: "Confirmed", count: orders.filter(o => o.status === "confirmed").length },
+                { key: "preparing", label: "Preparing", count: orders.filter(o => o.status === "preparing").length },
                 { key: "delivered", label: "Delivered", count: orders.filter(o => o.status === "delivered").length },
                 { key: "cancelled", label: "Cancelled", count: orders.filter(o => o.status === "cancelled").length }
               ].map((tab) => (
@@ -141,23 +150,27 @@ export default function UserOrders() {
             </div>
           ) : (
             filteredOrders.map((order) => (
-              <div key={order.id} className="bg-white rounded-lg shadow p-6">
+              <div key={order._id} className="bg-white rounded-lg shadow p-6">
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     <div className="flex items-center gap-2 mb-2">
                       {getStatusIcon(order.status)}
-                      <span className="font-medium text-gray-900">Order #{order.id}</span>
+                      <span className="font-medium text-gray-900">Order #{order.orderNumber}</span>
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
-                        {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                        {order.status.charAt(0).toUpperCase() + order.status.slice(1).replace('_', ' ')}
                       </span>
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900">{order.restaurantName}</h3>
-                    <p className="text-sm text-gray-600">{order.outletName}</p>
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      {order.restaurantId?.name || 'Restaurant'}
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      {order.outletId?.name || 'Outlet'}
+                    </p>
                   </div>
                   <div className="text-right">
-                    <div className="text-lg font-bold text-gray-900">₹{order.total}</div>
+                    <div className="text-lg font-bold text-gray-900">₹{order.totalPrice.toFixed(2)}</div>
                     <div className="text-sm text-gray-500">
-                      {new Date(order.orderDate).toLocaleDateString()}
+                      {new Date(order.createdAt).toLocaleDateString()}
                     </div>
                   </div>
                 </div>
@@ -168,9 +181,9 @@ export default function UserOrders() {
                     {order.items.map((item, index) => (
                       <div key={index} className="flex justify-between text-sm">
                         <span className="text-gray-600">
-                          {item.quantity}x {item.name}
+                          {item.quantity}x {item.itemName}
                         </span>
-                        <span className="text-gray-900">₹{item.price * item.quantity}</span>
+                        <span className="text-gray-900">₹{(item.itemPrice * item.quantity).toFixed(2)}</span>
                       </div>
                     ))}
                   </div>
@@ -178,19 +191,15 @@ export default function UserOrders() {
 
                 {/* Order Status Info */}
                 <div className="border-t border-gray-200 pt-4 mb-4">
-                  {order.status === "delivered" && order.deliveryDate && (
-                    <p className="text-sm text-gray-600">
-                      Delivered on {new Date(order.deliveryDate).toLocaleString()}
-                    </p>
-                  )}
-                  {order.status === "preparing" && order.estimatedDelivery && (
-                    <p className="text-sm text-gray-600">
-                      Estimated delivery: {new Date(order.estimatedDelivery).toLocaleTimeString()}
-                    </p>
-                  )}
-                  {order.status === "cancelled" && order.cancelReason && (
-                    <p className="text-sm text-red-600">
-                      Cancelled: {order.cancelReason}
+                  <p className="text-sm text-gray-600 mb-1">
+                    <strong>Delivery Address:</strong> {order.deliveryAddress}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    <strong>Payment:</strong> {order.paymentMethod} ({order.paymentStatus})
+                  </p>
+                  {order.status === "delivered" && order.updatedAt && (
+                    <p className="text-sm text-gray-600 mt-2">
+                      Delivered on {new Date(order.updatedAt).toLocaleString()}
                     </p>
                   )}
                 </div>
@@ -205,9 +214,9 @@ export default function UserOrders() {
                       <RotateCcw size={16} />
                       Reorder
                     </button>
-                    {order.status === "delivered" && !order.rating && (
+                    {order.status === "delivered" && (
                       <button
-                        onClick={() => handleRateOrder(order.id)}
+                        onClick={() => handleRateOrder(order._id)}
                         className="flex items-center gap-1 px-3 py-2 text-sm bg-black text-white rounded-md hover:bg-gray-800 transition-colors"
                       >
                         <Star size={16} />
@@ -215,13 +224,6 @@ export default function UserOrders() {
                       </button>
                     )}
                   </div>
-                  
-                  {order.rating && (
-                    <div className="flex items-center gap-1">
-                      <Star className="text-yellow-400 fill-current" size={16} />
-                      <span className="text-sm text-gray-600">Rated {order.rating}/5</span>
-                    </div>
-                  )}
                 </div>
               </div>
             ))

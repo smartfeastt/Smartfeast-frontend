@@ -11,11 +11,11 @@ import {
   Trash2,
   Save
 } from "react-feather";
-import { useAuth } from "../../context/AuthContext.jsx";
+import { useAppSelector } from "../../store/hooks.js";
 import DynamicHeader from "../../components/headers/DynamicHeader.jsx";
 
 export default function UserSettings() {
-  const { user } = useAuth();
+  const { user } = useAppSelector((state) => state.auth);
   const [activeSection, setActiveSection] = useState("notifications");
   const [settings, setSettings] = useState({
     notifications: {

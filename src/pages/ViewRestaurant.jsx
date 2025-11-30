@@ -1,9 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { MapPin, ArrowRight, ArrowLeft, ShoppingCart, User, LogOut } from 'react-feather'
-import { useAuth } from '../context/AuthContext.jsx'
-import { useCart } from '../context/CartContext.jsx'
-import Cart from '../components/Cart.jsx'
+import { MapPin, ArrowRight, ArrowLeft } from 'react-feather'
 import DynamicHeader from '../components/headers/DynamicHeader.jsx'
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -12,8 +9,6 @@ export default function ViewRestaurant() {
   const { restaurantName } = useParams()
   const [restaurant, setRestaurant] = useState(null)
   const [loading, setLoading] = useState(true)
-  const { user, logout } = useAuth()
-  const { getTotalItems, toggleCart } = useCart()
 
   useEffect(() => {
     fetchRestaurant()
@@ -103,9 +98,6 @@ export default function ViewRestaurant() {
           </div>
         )}
       </div>
-
-      {/* Cart Sidebar */}
-      <Cart />
     </div>
   )
 }

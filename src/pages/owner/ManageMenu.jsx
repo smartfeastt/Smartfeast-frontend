@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useAuth } from '../../context/AuthContext.jsx'
+import { useAppSelector } from '../../store/hooks.js'
 import { Plus, Edit, Trash2, ArrowLeft, Upload } from 'react-feather'
 import DynamicHeader from '../../components/headers/DynamicHeader.jsx'
 
@@ -8,7 +8,7 @@ const API_URL = import.meta.env.VITE_API_URL;
 
 export default function ManageMenu() {
   const { outletId } = useParams()
-  const { token } = useAuth()
+  const { token } = useAppSelector((state) => state.auth)
   const navigate = useNavigate()
   const [items, setItems] = useState([])
   const [categories, setCategories] = useState([])

@@ -1,210 +1,321 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../../context/AuthContext.jsx'
-import { Plus, MapPin,Settings, LogOut } from 'react-feather'
-import { Building2 } from 'lucide-react';
-import DynamicHeader from '../../components/headers/DynamicHeader.jsx'
+import { useState, useEffect } from "react";
+import { 
+  TrendingUp, 
+  DollarSign, 
+  Package, 
+  Users, 
+  BarChart,
+  Calendar,
+  ArrowUpRight,
+  ArrowDownRight,
+  Eye,
+  Plus
+} from "react-feather";
+import { Store } from "lucide-react";
 
-const API_URL = import.meta.env.VITE_API_URL;
+import { Link } from "react-router-dom";
+import { useAppSelector } from "../../store/hooks.js";
+import DynamicHeader from "../../components/headers/DynamicHeader.jsx";
 
-export default function OwnerDashboard() {
-  const navigate = useNavigate()
-  const [restaurants, setRestaurants] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const [newRestaurantName, setNewRestaurantName] = useState('')
-  const [outletCount, setOutletCount] = useState(3)
+export default function OwnerDashboardNew() {
+  const { user } = useAppSelector((state) => state.auth);
+  const [stats, setStats] = useState({
+    totalRevenue: 0,
+    totalOrders: 0,
+    totalRestaurants: 0,
+    totalOutlets: 0,
+    monthlyGrowth: 0,
+    orderGrowth: 0
+  });
+  const [recentOrders, setRecentOrders] = useState([]);
+  const [topRestaurants, setTopRestaurants] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const { user, token, loading: authLoading, logout } = useAuth()
-const [dataLoading, setDataLoading] = useState(true)
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
 
-useEffect(() => {
-  if (authLoading) return
-
-  if (!user || user.type !== 'owner') {
-    console.log("user is not an owner")
-    navigate('/login')
-    return
-  }
-
-  fetchRestaurants()
-}, [user, token, authLoading])
-
-
-  const fetchRestaurants = async () => {
+  const fetchDashboardData = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/restaurant/owner/all`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        }
+      // Mock data - in real app, fetch from API
+      setStats({
+        totalRevenue: 125000,
+        totalOrders: 1250,
+        totalRestaurants: 3,
+        totalOutlets: 8,
+        monthlyGrowth: 12.5,
+        orderGrowth: 8.3
       });
-      console.log("data received form backend");
-      const data = await response.json();
-      if (data.success) {
-        setRestaurants(data.restaurants || []);
-      }
+
+      setRecentOrders([
+        {
+          id: "ORD001",
+          customerName: "John Doe",
+          restaurant: "Pizza Palace",
+          outlet: "Downtown",
+          amount: 450,
+          status: "delivered",
+          time: "2 hours ago"
+        },
+        {
+          id: "ORD002",
+          customerName: "Jane Smith",
+          restaurant: "Burger Hub",
+          outlet: "Mall Road",
+          amount: 320,
+          status: "preparing",
+          time: "30 minutes ago"
+        },
+        {
+          id: "ORD003",
+          customerName: "Mike Johnson",
+          restaurant: "Cafe Delight",
+          outlet: "City Center",
+          amount: 180,
+          status: "delivered",
+          time: "1 hour ago"
+        }
+      ]);
+
+      setTopRestaurants([
+        {
+          name: "Pizza Palace",
+          outlets: 3,
+          revenue: 65000,
+          orders: 520,
+          growth: 15.2
+        },
+        {
+          name: "Burger Hub",
+          outlets: 3,
+          revenue: 42000,
+          orders: 380,
+          growth: 8.7
+        },
+        {
+          name: "Cafe Delight",
+          outlets: 2,
+          revenue: 18000,
+          orders: 350,
+          growth: 12.1
+        }
+      ]);
     } catch (error) {
-      console.error('Error fetching restaurants:', error);
+      console.error("Error fetching dashboard data:", error);
     } finally {
       setLoading(false);
     }
-  }
+  };
 
-  const handleCreateRestaurant = async (e) => {
-    e.preventDefault();
-    try {
-      const response = await fetch(`${API_URL}/api/restaurant/create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          name: newRestaurantName,
-          outlet_count: outletCount,
-        }),
-      })
-      const data = await response.json()
-      if (data.success) {
-        setShowCreateModal(false)
-        setNewRestaurantName('')
-        setOutletCount(3)
-        fetchRestaurants()
-      } else {
-        alert(data.message || 'Failed to create restaurant')
-      }
-    } catch (error) {
-      console.error('Error creating restaurant:', error)
-      alert('Failed to create restaurant')
-    }
-  }
+  const StatCard = ({ title, value, icon: Icon, growth, color = "blue" }) => (
+    <div className="bg-white rounded-lg shadow p-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-gray-600">{title}</p>
+          <p className="text-2xl font-bold text-gray-900">{value}</p>
+          {growth !== undefined && (
+            <div className="flex items-center mt-2">
+              {growth >= 0 ? (
+                <ArrowUpRight className="text-green-500" size={16} />
+              ) : (
+                <ArrowDownRight className="text-red-500" size={16} />
+              )}
+              <span className={`text-sm font-medium ${growth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {Math.abs(growth)}% from last month
+              </span>
+            </div>
+          )}
+        </div>
+        <div className={`p-3 rounded-full bg-${color}-100`}>
+          <Icon className={`text-${color}-600`} size={24} />
+        </div>
+      </div>
+    </div>
+  );
 
-  
-  
-  if (loading || authLoading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <DynamicHeader />
+        <div className="flex items-center justify-center h-96">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading dashboard...</p>
+          </div>
+        </div>
+      </div>
+    );
   }
-  
 
   return (
     <div className="min-h-screen bg-gray-50">
       <DynamicHeader />
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Create Restaurant Button */}
-        <div className="mb-6 flex justify-between items-center">
-          <h2 className="text-2xl font-bold text-gray-900">My Restaurants</h2>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800"
-          >
-            <Plus size={20} />
-            Create Restaurant
-          </button>
+      
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Welcome Section */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">
+            Welcome back, {user?.name || user?.email?.split('@')[0]}!
+          </h1>
+          <p className="text-gray-600 mt-2">
+            Here's what's happening with your restaurants today.
+          </p>
         </div>
 
-        {/* Restaurants Grid */}
-        {restaurants.length === 0 ? (
-          <div className="text-center py-12">
-            <Building2 size={48} className="mx-auto text-gray-400 mb-4" />
-            <p className="text-gray-600">No restaurants yet. Create your first restaurant!</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {restaurants.map((restaurant) => (
-              <div
-                key={restaurant._id}
-                className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <h3 className="text-xl font-semibold text-gray-900">{restaurant.name}</h3>
-                  <button
-                    onClick={() => navigate(`/owner/restaurant/${restaurant._id}`)}
-                    className="text-gray-600 hover:text-gray-900"
-                  >
-                    <Settings size={18} />
-                  </button>
-                </div>
-                <div className="space-y-2 text-sm text-gray-600">
-                  <div className="flex items-center gap-2">
-                    <MapPin size={16} />
-                    <span>{restaurant.outlets?.length || 0} Outlets</span>
-                  </div>
-                  <div>
-                    <span>Limit: {restaurant.outlet_count} outlets</span>
-                  </div>
-                </div>
-                <div className="mt-4 flex gap-2">
-                  <button
-                    onClick={() => navigate(`/owner/restaurant/${restaurant._id}`)}
-                    className="flex-1 px-4 py-2 bg-gray-900 text-white rounded hover:bg-gray-800"
-                  >
-                    Manage
-                  </button>
-                  <button
-                    onClick={() => navigate(`/view/${restaurant.name}`)}
-                    className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
-                  >
-                    View
-                  </button>
-                </div>
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <StatCard
+            title="Total Revenue"
+            value={`₹${stats.totalRevenue.toLocaleString()}`}
+            icon={DollarSign}
+            growth={stats.monthlyGrowth}
+            color="green"
+          />
+          <StatCard
+            title="Total Orders"
+            value={stats.totalOrders.toLocaleString()}
+            icon={Package}
+            growth={stats.orderGrowth}
+            color="blue"
+          />
+          <StatCard
+            title="Restaurants"
+            value={stats.totalRestaurants}
+            icon={Store}
+            color="purple"
+          />
+          <StatCard
+            title="Outlets"
+            value={stats.totalOutlets}
+            icon={Users}
+            color="orange"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+          {/* Recent Orders */}
+          <div className="bg-white rounded-lg shadow">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <div className="flex justify-between items-center">
+                <h2 className="text-lg font-semibold text-gray-900">Recent Orders</h2>
+                <Link
+                  to="/owner/orders"
+                  className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                >
+                  View all <Eye size={16} />
+                </Link>
               </div>
-            ))}
+            </div>
+            <div className="p-6">
+              <div className="space-y-4">
+                {recentOrders.map((order) => (
+                  <div key={order.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    <div>
+                      <p className="font-medium text-gray-900">{order.customerName}</p>
+                      <p className="text-sm text-gray-600">{order.restaurant} - {order.outlet}</p>
+                      <p className="text-xs text-gray-500">{order.time}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold text-gray-900">₹{order.amount}</p>
+                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
+                        order.status === 'delivered' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {order.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-        )}
+
+          {/* Top Performing Restaurants */}
+          <div className="bg-white rounded-lg shadow">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <div className="flex justify-between items-center">
+                <h2 className="text-lg font-semibold text-gray-900">Top Restaurants</h2>
+                <Link
+                  to="/owner/analytics"
+                  className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                >
+                  View analytics <BarChart size={16} />
+                </Link>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="space-y-4">
+                {topRestaurants.map((restaurant, index) => (
+                  <div key={restaurant.name} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-sm font-medium">
+                        {index + 1}
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">{restaurant.name}</p>
+                        <p className="text-sm text-gray-600">{restaurant.outlets} outlets</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold text-gray-900">₹{restaurant.revenue.toLocaleString()}</p>
+                      <div className="flex items-center gap-1">
+                        <ArrowUpRight className="text-green-500" size={12} />
+                        <span className="text-xs text-green-600">{restaurant.growth}%</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Link
+              to="/owner/restaurant/new"
+              className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Plus className="text-blue-600" size={20} />
+              </div>
+              <div>
+                <p className="font-medium text-gray-900">Add Restaurant</p>
+                <p className="text-sm text-gray-600">Create a new restaurant</p>
+              </div>
+            </Link>
+            
+            <Link
+              to="/owner/analytics"
+              className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <div className="p-2 bg-green-100 rounded-lg">
+                <BarChart className="text-green-600" size={20} />
+              </div>
+              <div>
+                <p className="font-medium text-gray-900">View Analytics</p>
+                <p className="text-sm text-gray-600">Detailed performance reports</p>
+              </div>
+            </Link>
+            
+            <Link
+              to="/owner/payments"
+              className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <div className="p-2 bg-purple-100 rounded-lg">
+                <DollarSign className="text-purple-600" size={20} />
+              </div>
+              <div>
+                <p className="font-medium text-gray-900">Payments</p>
+                <p className="text-sm text-gray-600">Manage payouts & settlements</p>
+              </div>
+            </Link>
+          </div>
+        </div>
       </div>
-
-      {/* Create Restaurant Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-bold mb-4">Create New Restaurant</h3>
-            <form onSubmit={handleCreateRestaurant}>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Restaurant Name
-                </label>
-                <input
-                  type="text"
-                  value={newRestaurantName}
-                  onChange={(e) => setNewRestaurantName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
-                  required
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Outlet Limit
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  value={outletCount}
-                  onChange={(e) => setOutletCount(parseInt(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
-                  required
-                />
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-2 bg-black text-white rounded hover:bg-gray-800"
-                >
-                  Create
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
-  )
+  );
 }
-

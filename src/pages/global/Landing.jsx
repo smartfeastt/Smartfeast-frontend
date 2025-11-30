@@ -1,11 +1,11 @@
 import { Link, Navigate } from 'react-router-dom'
-import { useAuth } from '../../context/AuthContext.jsx'
+import { useAppSelector } from '../../store/hooks.js'
 import Footer from '../../components/global/Footer'
 import Header from '../../components/global/Header'
 import UserHome from '../user/UserHome.jsx'
 
 export default function Landing() {
-  const { user } = useAuth();
+  const { user } = useAppSelector((state) => state.auth);
 
   // If user is logged in, show appropriate dashboard
   if (user) {

@@ -1,47 +1,37 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { useAppDispatch } from "../../store/hooks.js";
-import { loginUser } from "../../store/slices/authSlice.js";
-import { Eye, EyeOff, Mail, Lock, ArrowLeft } from "react-feather";
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { useAppDispatch } from '../../store/hooks.js'
+import { loginUser } from '../../store/slices/authSlice.js'
+import { Mail, Lock, ArrowLeft } from 'react-feather'
+import { Building2 } from "lucide-react";
 
-export default function UserSignIn() {
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-  });
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const dispatch = useAppDispatch();
-  const navigate = useNavigate();
-
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-    setError("");
-  };
+export default function SignIn() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [type, setType] = useState('Owner')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const dispatch = useAppDispatch()
+  const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
+    e.preventDefault()
+    setError('')
+    setLoading(true)
 
     try {
-      const result = await dispatch(loginUser({ 
-        email: formData.email, 
-        password: formData.password, 
-        type: "User" 
-      })).unwrap();
-      navigate("/");
+      await dispatch(loginUser({ email, password, type })).unwrap()
+      if (type === 'Owner') {
+        navigate('/owner/dashboard');
+      } else if (type === 'Manager') {
+        navigate('/manager/dashboard');
+      }
     } catch (error) {
-      setError(error || "Login failed");
+      setError(error || 'Login failed')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
@@ -58,8 +48,11 @@ export default function UserSignIn() {
         {/* Sign In Form */}
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back!</h1>
-            <p className="text-gray-600">Sign in to your account to continue ordering</p>
+            <div className="flex justify-center mb-4">
+              <Building2 size={48} className="text-gray-900" />
+            </div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Business Sign In</h1>
+            <p className="text-gray-600">Sign in to manage your restaurants and outlets</p>
           </div>
 
           {error && (
@@ -71,6 +64,23 @@ export default function UserSignIn() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
+                Account Type
+              </label>
+              <div className="relative">
+                <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                <select
+                  value={type}
+                  onChange={(e) => setType(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors appearance-none bg-white"
+                >
+                  <option value="Owner">Restaurant Owner</option>
+                  <option value="Manager">Manager</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Email Address
               </label>
               <div className="relative">
@@ -78,8 +88,8 @@ export default function UserSignIn() {
                 <input
                   type="email"
                   name="email"
-                  value={formData.email}
-                  onChange={handleChange}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   required
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
                   placeholder="Enter your email"
@@ -94,21 +104,14 @@ export default function UserSignIn() {
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                 <input
-                  type={showPassword ? "text" : "password"}
+                  type="password"
                   name="password"
-                  value={formData.password}
-                  onChange={handleChange}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
                   placeholder="Enter your password"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
               </div>
             </div>
 
@@ -125,27 +128,28 @@ export default function UserSignIn() {
             <p className="text-gray-600">
               Don't have an account?{" "}
               <Link
-                to="/user/signup"
+                to="/vendor/signup"
                 className="text-black font-medium hover:underline"
               >
-                Sign up here
+                Contact Admin
               </Link>
             </p>
           </div>
 
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-500">
-              Are you a restaurant owner or manager?{" "}
+              Are you a customer?{" "}
               <Link
-                to="/signin"
+                to="/user/signin"
                 className="text-black font-medium hover:underline"
               >
-                Business Sign In
+                User Sign In
               </Link>
             </p>
           </div>
         </div>
       </div>
     </div>
-  );
+  )
 }
+

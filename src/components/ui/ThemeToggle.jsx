@@ -1,12 +1,14 @@
-import { useTheme } from '../../context/ThemeContext';
+import { useAppSelector, useAppDispatch } from '../../store/hooks.js';
+import { toggleTheme, selectIsDark } from '../../store/slices/themeSlice.js';
 import { FaSun, FaMoon } from 'react-icons/fa';
 
 const ThemeToggle = ({ className = '' }) => {
-  const { isDark, toggleTheme } = useTheme();
+  const isDark = useAppSelector(selectIsDark);
+  const dispatch = useAppDispatch();
 
   return (
     <button
-      onClick={toggleTheme}
+      onClick={() => dispatch(toggleTheme())}
       className={`relative inline-flex items-center justify-center w-10 h-10 rounded-lg
         bg-slate-100/80 dark:bg-slate-800/80 backdrop-blur-sm
         hover:bg-slate-200/80 dark:hover:bg-slate-700/80

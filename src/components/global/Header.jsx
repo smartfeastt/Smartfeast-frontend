@@ -50,16 +50,22 @@ const LandingHeader = () => {
         <div className="flex items-center space-x-3">
           <AnimatedThemeToggler />
           <Link
-            to="/signin"
-            className="bg-white text-black px-6 py-2 rounded-md font-semibold hover:bg-gray-100 transition"
+            to="/user/signin"
+            className="bg-white text-black px-4 py-2 rounded-md font-semibold hover:bg-gray-100 transition text-sm"
           >
-            Sign In
+            Sign In as User
           </Link>
           <Link
-            to="/signup"
-            className="bg-black text-white px-6 py-2 rounded-md font-semibold hover:bg-gray-800 transition"
+            to="/signin"
+            className="bg-white text-black px-4 py-2 rounded-md font-semibold hover:bg-gray-100 transition text-sm"
           >
-            Get Started
+            Sign In as Vendor
+          </Link>
+          <Link
+            to="/user/signup"
+            className="bg-black text-white px-4 py-2 rounded-md font-semibold hover:bg-gray-800 transition text-sm"
+          >
+            Sign Up as User
           </Link>
         </div>
       </div>
@@ -68,3 +74,4 @@ const LandingHeader = () => {
 };
 
 export default LandingHeader;
+

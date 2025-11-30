@@ -1,9 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Search, MapPin, Star, Clock, User, ShoppingCart, LogOut } from "react-feather";
-import { useAuth } from "../../context/AuthContext.jsx";
-import { useCart } from "../../context/CartContext.jsx";
-import Cart from "../../components/Cart.jsx";
+import { Search, MapPin, Star, Clock } from "react-feather";
+import DynamicHeader from "../../components/headers/DynamicHeader.jsx";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -11,8 +9,6 @@ export default function UserHome() {
   const [restaurants, setRestaurants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const { user, logout } = useAuth();
-  const { getTotalItems, toggleCart } = useCart();
 
   useEffect(() => {
     fetchRestaurants();
@@ -39,61 +35,7 @@ export default function UserHome() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-4">
-              <Link to="/" className="text-2xl font-bold text-gray-900">
-                SmartFeast
-              </Link>
-            </div>
-            
-            <div className="flex items-center gap-4">
-              {user ? (
-                <>
-                  <span className="text-sm text-gray-600 flex items-center gap-1">
-                    <User size={16} />
-                    Welcome, {user.name || user.email.split('@')[0]}!
-                  </span>
-                  <button
-                    onClick={toggleCart}
-                    className="relative p-2 text-gray-600 hover:text-gray-900 transition-colors"
-                  >
-                    <ShoppingCart size={24} />
-                    {getTotalItems() > 0 && (
-                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                        {getTotalItems()}
-                      </span>
-                    )}
-                  </button>
-                  <button
-                    onClick={logout}
-                    className="flex items-center gap-1 text-gray-600 hover:text-gray-900 transition-colors"
-                  >
-                    <LogOut size={16} />
-                    Logout
-                  </button>
-                </>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <Link
-                    to="/user/signin"
-                    className="px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
-                  >
-                    Sign In
-                  </Link>
-                  <Link
-                    to="/user/signup"
-                    className="px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 transition-colors"
-                  >
-                    Sign Up
-                  </Link>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
+      <DynamicHeader />
 
       {/* Hero Section */}
       <section className="bg-gradient-to-r from-gray-900 to-gray-700 text-white py-16">
@@ -189,9 +131,6 @@ export default function UserHome() {
           )}
         </div>
       </section>
-
-      {/* Cart Sidebar */}
-      <Cart />
     </div>
   );
 }
