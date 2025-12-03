@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { 
   Package, 
   Clock, 
@@ -19,6 +20,7 @@ const API_URL = import.meta.env.VITE_API_URL;
 export default function OwnerOrders() {
   const { token, user } = useAppSelector((state) => state.auth);
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,6 +33,7 @@ export default function OwnerOrders() {
   });
   const [restaurants, setRestaurants] = useState([]);
   const [outlets, setOutlets] = useState([]);
+  const [outletMap, setOutletMap] = useState({}); // Map outlet name to outletId
 
   useEffect(() => {
     if (token && user?.type === 'owner') {
@@ -59,14 +62,19 @@ export default function OwnerOrders() {
         
         // Get all outlets from all restaurants
         const allOutlets = [];
+        const outletNameToIdMap = {};
         for (const restaurant of restaurantsData.restaurants || []) {
           const outletsResponse = await fetch(`${API_URL}/api/outlet/restaurant/${restaurant._id}`);
           const outletsData = await outletsResponse.json();
           if (outletsData.success) {
-            allOutlets.push(...(outletsData.outlets || []));
+            (outletsData.outlets || []).forEach(outlet => {
+              allOutlets.push(outlet);
+              outletNameToIdMap[outlet.name] = outlet._id;
+            });
           }
         }
         setOutlets(allOutlets);
+        setOutletMap(outletNameToIdMap);
         
         // Create a map of outletId to restaurant name
         const outletToRestaurantMap = {};
@@ -108,6 +116,7 @@ export default function OwnerOrders() {
         const transformedOrders = allOrders.map(order => ({
           id: order.orderNumber || order._id,
           _id: order._id,
+          outletId: order.outletId, // Add outletId for navigation
           customerName: order.userId?.name || order.customerInfo?.name || 'Guest',
           customerEmail: order.userId?.email || order.customerInfo?.email || '',
           customerPhone: order.customerInfo?.phone || '',
@@ -334,7 +343,10 @@ export default function OwnerOrders() {
               {filters.restaurant !== "all" && outlets
                 .filter(outlet => {
                   const restaurant = restaurants.find(r => r.name === filters.restaurant);
-                  return restaurant && restaurant.outlets?.some(id => id.toString() === outlet._id);
+                  if (!restaurant) return false;
+                  // Check if outlet belongs to this restaurant
+                  return restaurant.outlets?.some(id => id.toString() === outlet._id) ||
+                         orders.some(order => order.restaurant === restaurant.name && order.outlet === outlet.name);
                 })
                 .map(outlet => (
                   <option key={outlet._id} value={outlet.name}>
@@ -446,7 +458,22 @@ export default function OwnerOrders() {
 
                 {/* Actions */}
                 <div className="flex justify-between items-center pt-4 border-t border-gray-200">
-                  <button className="flex items-center gap-1 text-blue-600 hover:text-blue-800 transition-colors">
+                  <button 
+                    onClick={() => {
+                      if (order.outletId) {
+                        navigate(`/owner/outlet/${order.outletId}`);
+                      } else {
+                        // Fallback: find outlet by name
+                        const outletId = outletMap[order.outlet];
+                        if (outletId) {
+                          navigate(`/owner/outlet/${outletId}`);
+                        } else {
+                          alert('Outlet not found');
+                        }
+                      }
+                    }}
+                    className="flex items-center gap-1 text-blue-600 hover:text-blue-800 transition-colors"
+                  >
                     <Eye size={16} />
                     View Details
                   </button>

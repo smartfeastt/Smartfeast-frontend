@@ -1,4 +1,65 @@
-import { createSlice } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+
+const API_URL = import.meta.env.VITE_API_URL;
+
+// Async thunk to fetch cart from backend
+export const fetchCart = createAsyncThunk(
+  'cart/fetchCart',
+  async (token, { rejectWithValue }) => {
+    try {
+      const response = await fetch(`${API_URL}/api/cart`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      const data = await response.json();
+      if (data.success) {
+        // Transform backend cart items to match frontend format
+        return (data.cart?.items || []).map(item => ({
+          _id: item.itemId?._id || item.itemId,
+          itemName: item.itemName,
+          itemPrice: item.itemPrice,
+          quantity: item.quantity,
+          itemPhoto: item.itemPhoto,
+          outletId: item.outletId,
+        }));
+      }
+      return rejectWithValue(data.message || 'Failed to fetch cart');
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+// Async thunk to sync cart to backend
+export const syncCartToBackend = createAsyncThunk(
+  'cart/syncToBackend',
+  async ({ token, items }, { rejectWithValue }) => {
+    try {
+      // For each item, add to backend cart
+      for (const item of items) {
+        await fetch(`${API_URL}/api/cart/add`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            itemId: item._id,
+            quantity: item.quantity,
+            itemName: item.itemName,
+            itemPrice: item.itemPrice,
+            itemPhoto: item.itemPhoto,
+            outletId: item.outletId,
+          }),
+        });
+      }
+      return true;
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
 
 // Load initial state from localStorage
 const loadInitialState = () => {
@@ -8,6 +69,7 @@ const loadInitialState = () => {
       return {
         items: JSON.parse(savedCart),
         isOpen: false,
+        syncing: false,
       };
     } catch (error) {
       console.error('Error loading cart from localStorage:', error);
@@ -17,6 +79,7 @@ const loadInitialState = () => {
     items: [],
     isOpen: false,
     table: null,
+    syncing: false,
   };
 };
 
@@ -25,7 +88,7 @@ const cartSlice = createSlice({
   initialState: loadInitialState(),
   reducers: {
     addToCart: (state, action) => {
-      const { item, quantity = 1, outletId } = action.payload;
+      const { item, quantity = 1, outletId, syncToBackend = false } = action.payload;
       const existingItem = state.items.find(cartItem => cartItem._id === item._id);
       
       if (existingItem) {
@@ -36,6 +99,8 @@ const cartSlice = createSlice({
       
       // Save to localStorage
       localStorage.setItem('smartfeast_cart', JSON.stringify(state.items));
+      
+      // Note: Backend sync is handled by CartSync component to avoid race conditions
     },
     removeFromCart: (state, action) => {
       state.items = state.items.filter(item => item._id !== action.payload);
@@ -54,10 +119,16 @@ const cartSlice = createSlice({
       }
       
       localStorage.setItem('smartfeast_cart', JSON.stringify(state.items));
+      
+      // Note: Backend sync is handled by CartSync component
     },
     clearCart: (state) => {
       state.items = [];
       localStorage.removeItem('smartfeast_cart');
+    },
+    setCartItems: (state, action) => {
+      state.items = action.payload;
+      localStorage.setItem('smartfeast_cart', JSON.stringify(action.payload));
     },
     toggleCart: (state) => {
       state.isOpen = !state.isOpen;
@@ -69,13 +140,37 @@ const cartSlice = createSlice({
       state.table = action.payload;
     },
   },
+  extraReducers: (builder) => {
+    builder
+      .addCase(fetchCart.pending, (state) => {
+        state.syncing = true;
+      })
+      .addCase(fetchCart.fulfilled, (state, action) => {
+        state.items = action.payload;
+        state.syncing = false;
+        localStorage.setItem('smartfeast_cart', JSON.stringify(action.payload));
+      })
+      .addCase(fetchCart.rejected, (state) => {
+        state.syncing = false;
+      })
+      .addCase(syncCartToBackend.pending, (state) => {
+        state.syncing = true;
+      })
+      .addCase(syncCartToBackend.fulfilled, (state) => {
+        state.syncing = false;
+      })
+      .addCase(syncCartToBackend.rejected, (state) => {
+        state.syncing = false;
+      });
+  },
 });
 
 export const { 
   addToCart, 
   removeFromCart, 
   updateQuantity, 
-  clearCart, 
+  clearCart,
+  setCartItems,
   toggleCart,
   setCartOpen,
   setTable

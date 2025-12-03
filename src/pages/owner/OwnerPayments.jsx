@@ -11,88 +11,53 @@ import {
   AlertCircle,
   Filter
 } from "react-feather";
+import { useAppSelector } from "../../store/hooks.js";
 import DynamicHeader from "../../components/headers/DynamicHeader.jsx";
 
 export default function OwnerPayments() {
+  const { token } = useAppSelector((state) => state.auth);
   const [activeTab, setActiveTab] = useState("overview");
+  const [loading, setLoading] = useState(true);
   const [paymentData, setPaymentData] = useState({
     overview: {
-      totalEarnings: 125000,
-      pendingPayouts: 8500,
-      completedPayouts: 116500,
-      nextPayout: "2024-01-20",
-      nextPayoutAmount: 8500
+      totalEarnings: 0,
+      pendingPayouts: 0,
+      completedPayouts: 0,
+      nextPayout: null,
+      nextPayoutAmount: 0
     },
-    transactions: [
-      {
-        id: "TXN001",
-        type: "payout",
-        amount: 15000,
-        status: "completed",
-        date: "2024-01-15",
-        description: "Weekly payout - Pizza Palace",
-        reference: "PAY_001"
-      },
-      {
-        id: "TXN002",
-        type: "order",
-        amount: 450,
-        status: "completed",
-        date: "2024-01-16",
-        description: "Order #ORD001 - John Doe",
-        reference: "ORD_001"
-      },
-      {
-        id: "TXN003",
-        type: "payout",
-        amount: 12000,
-        status: "pending",
-        date: "2024-01-18",
-        description: "Weekly payout - Burger Hub",
-        reference: "PAY_002"
-      },
-      {
-        id: "TXN004",
-        type: "order",
-        amount: 320,
-        status: "completed",
-        date: "2024-01-16",
-        description: "Order #ORD002 - Jane Smith",
-        reference: "ORD_002"
-      }
-    ],
-    payouts: [
-      {
-        id: "PAY001",
-        restaurant: "Pizza Palace",
-        amount: 15000,
-        period: "Jan 8 - Jan 14, 2024",
-        status: "completed",
-        paidDate: "2024-01-15",
-        orders: 45,
-        commission: 2250
-      },
-      {
-        id: "PAY002",
-        restaurant: "Burger Hub",
-        amount: 12000,
-        period: "Jan 8 - Jan 14, 2024",
-        status: "pending",
-        scheduledDate: "2024-01-20",
-        orders: 38,
-        commission: 1800
-      },
-      {
-        id: "PAY003",
-        restaurant: "Cafe Delight",
-        amount: 8500,
-        period: "Jan 8 - Jan 14, 2024",
-        status: "processing",
-        orders: 32,
-        commission: 1275
-      }
-    ]
+    transactions: [],
+    payouts: []
   });
+
+  useEffect(() => {
+    if (token) {
+      fetchPaymentData();
+    }
+  }, [token]);
+
+  const fetchPaymentData = async () => {
+    try {
+      setLoading(true);
+      // TODO: Implement actual API call when payment system is ready
+      // For now, show empty state
+      setPaymentData({
+        overview: {
+          totalEarnings: 0,
+          pendingPayouts: 0,
+          completedPayouts: 0,
+          nextPayout: null,
+          nextPayoutAmount: 0
+        },
+        transactions: [],
+        payouts: []
+      });
+    } catch (error) {
+      console.error('Error fetching payment data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -150,7 +115,9 @@ export default function OwnerPayments() {
             <p className="text-2xl font-bold text-gray-900">
               ₹{paymentData.overview.totalEarnings.toLocaleString()}
             </p>
-            <p className="text-sm text-gray-500 mt-1">This month</p>
+            <p className="text-sm text-gray-500 mt-1">
+              {paymentData.overview.totalEarnings === 0 ? 'No earnings yet' : 'This month'}
+            </p>
           </div>
 
           <div className="bg-white rounded-lg shadow p-6">
@@ -190,7 +157,9 @@ export default function OwnerPayments() {
               ₹{paymentData.overview.nextPayoutAmount.toLocaleString()}
             </p>
             <p className="text-sm text-gray-500 mt-1">
-              {new Date(paymentData.overview.nextPayout).toLocaleDateString()}
+              {paymentData.overview.nextPayout 
+                ? new Date(paymentData.overview.nextPayout).toLocaleDateString()
+                : 'No scheduled payout'}
             </p>
           </div>
         </div>
@@ -230,7 +199,12 @@ export default function OwnerPayments() {
               </div>
               <div className="p-6">
                 <div className="space-y-4">
-                  {paymentData.transactions.slice(0, 5).map((transaction) => (
+                  {loading ? (
+                    <div className="text-center py-8 text-gray-500">Loading transactions...</div>
+                  ) : paymentData.transactions.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">No transactions yet</div>
+                  ) : (
+                    paymentData.transactions.slice(0, 5).map((transaction) => (
                     <div key={transaction.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                       <div className="flex items-center gap-3">
                         {getStatusIcon(transaction.status)}
@@ -252,7 +226,8 @@ export default function OwnerPayments() {
                         </span>
                       </div>
                     </div>
-                  ))}
+                  ))
+                  )}
                 </div>
               </div>
             </div>
@@ -273,7 +248,9 @@ export default function OwnerPayments() {
                       ₹{paymentData.overview.nextPayoutAmount.toLocaleString()}
                     </p>
                     <p className="text-sm text-blue-700">
-                      Scheduled for {new Date(paymentData.overview.nextPayout).toLocaleDateString()}
+                      {paymentData.overview.nextPayout 
+                        ? `Scheduled for ${new Date(paymentData.overview.nextPayout).toLocaleDateString()}`
+                        : 'No payout scheduled'}
                     </p>
                   </div>
                   
@@ -353,7 +330,20 @@ export default function OwnerPayments() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {paymentData.payouts.map((payout) => (
+                  {loading ? (
+                    <tr>
+                      <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
+                        Loading payouts...
+                      </td>
+                    </tr>
+                  ) : paymentData.payouts.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
+                        No payouts yet
+                      </td>
+                    </tr>
+                  ) : (
+                    paymentData.payouts.map((payout) => (
                     <tr key={payout.id}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         {payout.id}
@@ -388,7 +378,8 @@ export default function OwnerPayments() {
                         </button>
                       </td>
                     </tr>
-                  ))}
+                  ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -415,7 +406,12 @@ export default function OwnerPayments() {
             </div>
             <div className="p-6">
               <div className="space-y-4">
-                {paymentData.transactions.map((transaction) => (
+                {loading ? (
+                  <div className="text-center py-8 text-gray-500">Loading transactions...</div>
+                ) : paymentData.transactions.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">No transactions found</div>
+                ) : (
+                  paymentData.transactions.map((transaction) => (
                   <div key={transaction.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
                     <div className="flex items-center gap-4">
                       {getStatusIcon(transaction.status)}
@@ -437,7 +433,8 @@ export default function OwnerPayments() {
                       </span>
                     </div>
                   </div>
-                ))}
+                ))
+                )}
               </div>
             </div>
           </div>

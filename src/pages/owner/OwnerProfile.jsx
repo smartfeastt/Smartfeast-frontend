@@ -2,17 +2,54 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppSelector, useAppDispatch } from '../../store/hooks.js'
 import { logout } from '../../store/slices/authSlice.js'
-import { ArrowLeft, LogOut } from 'react-feather'
+import { ArrowLeft, LogOut, Trash2 } from 'react-feather'
 import DynamicHeader from '../../components/headers/DynamicHeader.jsx'
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 export default function OwnerProfile() {
-  const { user } = useAppSelector((state) => state.auth)
+  const { user, token } = useAppSelector((state) => state.auth)
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
+  const [deleting, setDeleting] = useState(false)
 
   const handleLogout = () => {
     dispatch(logout())
     navigate('/login')
+  }
+
+  const handleDeleteAccount = async () => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete your account? This action cannot be undone. All your restaurants, outlets, and data will be permanently deleted."
+    );
+    
+    if (!confirmed) return;
+
+    try {
+      setDeleting(true);
+      const response = await fetch(`${API_URL}/api/auth/delete-account`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        dispatch(logout());
+        navigate('/');
+        alert('Your account has been deleted successfully.');
+      } else {
+        alert(data.message || 'Failed to delete account. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      alert('An error occurred while deleting your account. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
   }
 
   return (
@@ -60,10 +97,25 @@ export default function OwnerProfile() {
             </div>
           </div>
 
-          <div className="mt-8 pt-6 border-t border-gray-200">
+          <div className="mt-8 pt-6 border-t border-gray-200 space-y-4">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <h3 className="font-medium text-red-900 mb-2">Danger Zone</h3>
+              <p className="text-sm text-red-700 mb-4">
+                Deleting your account will permanently remove all your restaurants, outlets, and associated data. This action cannot be undone.
+              </p>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleting}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Trash2 size={18} />
+                {deleting ? 'Deleting...' : 'Delete Account'}
+              </button>
+            </div>
+            
             <button
               onClick={handleLogout}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+              className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
             >
               <LogOut size={18} />
               Logout

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { 
   Bell, 
   Lock, 
@@ -11,12 +12,18 @@ import {
   Trash2,
   Save
 } from "react-feather";
-import { useAppSelector } from "../../store/hooks.js";
+import { useAppSelector, useAppDispatch } from "../../store/hooks.js";
+import { logout } from "../../store/slices/authSlice.js";
 import DynamicHeader from "../../components/headers/DynamicHeader.jsx";
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 export default function UserSettings() {
-  const { user } = useAppSelector((state) => state.auth);
+  const { user, token } = useAppSelector((state) => state.auth);
+  const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState("notifications");
+  const [deleting, setDeleting] = useState(false);
   const [settings, setSettings] = useState({
     notifications: {
       orderUpdates: true,
@@ -56,10 +63,37 @@ export default function UserSettings() {
     alert("Settings saved successfully!");
   };
 
-  const handleDeleteAccount = () => {
-    if (confirm("Are you sure you want to delete your account? This action cannot be undone.")) {
-      // Handle account deletion
-      alert("Account deletion requested. You will receive a confirmation email.");
+  const handleDeleteAccount = async () => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete your account? This action cannot be undone. All your data will be permanently deleted."
+    );
+    
+    if (!confirmed) return;
+
+    try {
+      setDeleting(true);
+      const response = await fetch(`${API_URL}/api/auth/delete-account`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        dispatch(logout());
+        navigate('/');
+        alert('Your account has been deleted successfully.');
+      } else {
+        alert(data.message || 'Failed to delete account. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      alert('An error occurred while deleting your account. Please try again.');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -358,10 +392,11 @@ export default function UserSettings() {
                     <h3 className="font-medium text-gray-900 mb-4">Danger Zone</h3>
                     <button
                       onClick={handleDeleteAccount}
-                      className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+                      disabled={deleting}
+                      className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Trash2 size={16} />
-                      Delete Account
+                      {deleting ? 'Deleting...' : 'Delete Account'}
                     </button>
                     <p className="text-sm text-gray-600 mt-2">
                       This action cannot be undone. All your data will be permanently deleted.

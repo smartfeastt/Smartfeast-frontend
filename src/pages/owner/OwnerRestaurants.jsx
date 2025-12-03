@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppSelector, useAppDispatch } from '../../store/hooks.js';
-import { Plus, MapPin, Settings } from 'react-feather';
+import { Plus, MapPin, Settings, Trash2 } from 'react-feather';
 import { Building2 } from 'lucide-react';
 import DynamicHeader from '../../components/headers/DynamicHeader.jsx';
+
+const API_URL = import.meta.env.VITE_API_URL;
 import {
   fetchOwnerRestaurants,
   createRestaurant,
@@ -34,6 +36,7 @@ export default function OwnerDashboard() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newRestaurantName, setNewRestaurantName] = useState('');
   const [outletCount, setOutletCount] = useState(3);
+  const [deletingRestaurant, setDeletingRestaurant] = useState(null);
 
   // Auth check and data fetching
   useEffect(() => {
@@ -80,6 +83,41 @@ export default function OwnerDashboard() {
       dispatch(clearRestaurantError());
     }
   }, [showCreateModal, dispatch]);
+
+  const handleDeleteRestaurant = async (restaurantId) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this restaurant? This will also delete all associated outlets. This action cannot be undone."
+    );
+    
+    if (!confirmed) return;
+
+    try {
+      setDeletingRestaurant(restaurantId);
+      const response = await fetch(`${API_URL}/api/restaurant/delete/${restaurantId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token }),
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        // Refresh restaurants list
+        dispatch(fetchOwnerRestaurants(token));
+        alert('Restaurant deleted successfully.');
+      } else {
+        alert(data.message || 'Failed to delete restaurant. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error deleting restaurant:', error);
+      alert('An error occurred while deleting the restaurant. Please try again.');
+    } finally {
+      setDeletingRestaurant(null);
+    }
+  };
 
   // Loading state
   if (loading || authLoading) {
@@ -132,12 +170,21 @@ export default function OwnerDashboard() {
               >
                 <div className="flex justify-between items-start mb-4">
                   <h3 className="text-xl font-semibold text-gray-900">{restaurant.name}</h3>
-                  <button
-                    onClick={() => navigate(`/owner/restaurant/${restaurant._id}`)}
-                    className="text-gray-600 hover:text-gray-900 transition"
-                  >
-                    <Settings size={18} />
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => navigate(`/owner/restaurant/${restaurant._id}`)}
+                      className="text-gray-600 hover:text-gray-900 transition"
+                    >
+                      <Settings size={18} />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteRestaurant(restaurant._id)}
+                      disabled={deletingRestaurant === restaurant._id}
+                      className="text-red-600 hover:text-red-800 transition disabled:opacity-50"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="space-y-2 text-sm text-gray-600">

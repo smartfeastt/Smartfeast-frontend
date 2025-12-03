@@ -47,6 +47,7 @@ import ManagerDashboard from "./pages/manager/ManagerDashboard.jsx";
 
 import ProtectedRoute from "./components/global/PrivateRoute.jsx";
 import Toast from "./components/ui/Toast.jsx";
+import CartSync from "./components/CartSync.jsx";
 
 export default function App() {
   return (
@@ -57,6 +58,7 @@ export default function App() {
           v7_relativeSplatPath: true,
         }}
       >
+        <CartSync />
         <Toast />
         <Routes>
 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAppSelector } from '../../store/hooks.js'
-import { Plus, MapPin, Users, ArrowLeft } from 'react-feather'
+import { Plus, MapPin, Users, ArrowLeft, Trash2 } from 'react-feather'
 import DynamicHeader from '../../components/headers/DynamicHeader.jsx'
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -16,6 +16,20 @@ export default function OwnerRestaurant() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [newOutletName, setNewOutletName] = useState('')
   const [newOutletLocation, setNewOutletLocation] = useState('')
+  const [deletingOutlet, setDeletingOutlet] = useState(null)
+  const [newOutletAddress, setNewOutletAddress] = useState({
+    street: '',
+    city: '',
+    state: '',
+    pincode: '',
+    country: 'India',
+  })
+  const [newOutletCoordinates, setNewOutletCoordinates] = useState({
+    latitude: '',
+    longitude: '',
+  })
+  const [autoGeocode, setAutoGeocode] = useState(true)
+  const [geocoding, setGeocoding] = useState(false)
 
   useEffect(() => {
     fetchRestaurant()
@@ -48,9 +62,59 @@ export default function OwnerRestaurant() {
     }
   }
 
+  const handleGeocode = async () => {
+    if (!newOutletAddress.street || !newOutletAddress.city) {
+      alert('Please enter at least street and city for geocoding')
+      return
+    }
+
+    try {
+      setGeocoding(true)
+      const fullAddress = `${newOutletAddress.street}, ${newOutletAddress.city}, ${newOutletAddress.state} ${newOutletAddress.pincode}, ${newOutletAddress.country}`
+      const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || 'AIzaSyBf52RdrtPkb4hT_OYEU52q7eOMns4eHtg'
+      const encodedAddress = encodeURIComponent(fullAddress)
+      const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&key=${GOOGLE_MAPS_API_KEY}`
+
+      const response = await fetch(url)
+      const data = await response.json()
+
+      if (data.status === 'OK' && data.results && data.results.length > 0) {
+        const location = data.results[0].geometry.location
+        setNewOutletCoordinates({
+          latitude: location.lat,
+          longitude: location.lng,
+        })
+        alert('Location found! Coordinates updated.')
+      } else {
+        alert('Could not find location. Please enter coordinates manually.')
+      }
+    } catch (error) {
+      console.error('Error geocoding:', error)
+      alert('Error geocoding address. Please enter coordinates manually.')
+    } finally {
+      setGeocoding(false)
+    }
+  }
+
   const handleCreateOutlet = async (e) => {
     e.preventDefault()
     try {
+      const addressData = {
+        street: newOutletAddress.street,
+        city: newOutletAddress.city,
+        state: newOutletAddress.state,
+        pincode: newOutletAddress.pincode,
+        country: newOutletAddress.country,
+        fullAddress: `${newOutletAddress.street}, ${newOutletAddress.city}, ${newOutletAddress.state} ${newOutletAddress.pincode}, ${newOutletAddress.country}`.trim(),
+      }
+
+      const coordinatesData = newOutletCoordinates.latitude && newOutletCoordinates.longitude
+        ? {
+            latitude: parseFloat(newOutletCoordinates.latitude),
+            longitude: parseFloat(newOutletCoordinates.longitude),
+          }
+        : null
+
       const response = await fetch(`${API_URL}/api/outlet/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -58,7 +122,9 @@ export default function OwnerRestaurant() {
           token,
           restaurantId,
           name: newOutletName,
-          location: newOutletLocation,
+          location: newOutletLocation || addressData.fullAddress,
+          address: addressData,
+          coordinates: coordinatesData,
         }),
       })
       const data = await response.json()
@@ -66,6 +132,17 @@ export default function OwnerRestaurant() {
         setShowCreateModal(false)
         setNewOutletName('')
         setNewOutletLocation('')
+        setNewOutletAddress({
+          street: '',
+          city: '',
+          state: '',
+          pincode: '',
+          country: 'India',
+        })
+        setNewOutletCoordinates({
+          latitude: '',
+          longitude: '',
+        })
         fetchOutlets()
         fetchRestaurant()
       } else {
@@ -74,6 +151,41 @@ export default function OwnerRestaurant() {
     } catch (error) {
       console.error('Error creating outlet:', error)
       alert('Failed to create outlet')
+    }
+  }
+
+  const handleDeleteOutlet = async (outletId) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this outlet? This action cannot be undone."
+    );
+    
+    if (!confirmed) return;
+
+    try {
+      setDeletingOutlet(outletId);
+      const response = await fetch(`${API_URL}/api/outlet/delete/${outletId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token }),
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        fetchOutlets();
+        fetchRestaurant();
+        alert('Outlet deleted successfully.');
+      } else {
+        alert(data.message || 'Failed to delete outlet. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error deleting outlet:', error);
+      alert('An error occurred while deleting the outlet. Please try again.');
+    } finally {
+      setDeletingOutlet(null);
     }
   }
 
@@ -164,6 +276,14 @@ export default function OwnerRestaurant() {
                   >
                     View
                   </button>
+                  <button
+                    onClick={() => handleDeleteOutlet(outlet._id)}
+                    disabled={deletingOutlet === outlet._id}
+                    className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Delete Outlet"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
               </div>
             ))}
@@ -198,7 +318,117 @@ export default function OwnerRestaurant() {
                   value={newOutletLocation}
                   onChange={(e) => setNewOutletLocation(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
+                  placeholder="Short location description"
                 />
+              </div>
+
+              <div className="mb-4 border-t pt-4">
+                <h4 className="text-sm font-semibold text-gray-700 mb-3">Address Details</h4>
+                
+                <div className="mb-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Street Address
+                  </label>
+                  <input
+                    type="text"
+                    value={newOutletAddress.street}
+                    onChange={(e) => setNewOutletAddress({ ...newOutletAddress, street: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
+                    placeholder="Street, Building, etc."
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      City
+                    </label>
+                    <input
+                      type="text"
+                      value={newOutletAddress.city}
+                      onChange={(e) => setNewOutletAddress({ ...newOutletAddress, city: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      State
+                    </label>
+                    <input
+                      type="text"
+                      value={newOutletAddress.state}
+                      onChange={(e) => setNewOutletAddress({ ...newOutletAddress, state: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Pincode
+                    </label>
+                    <input
+                      type="text"
+                      value={newOutletAddress.pincode}
+                      onChange={(e) => setNewOutletAddress({ ...newOutletAddress, pincode: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Country
+                    </label>
+                    <input
+                      type="text"
+                      value={newOutletAddress.country}
+                      onChange={(e) => setNewOutletAddress({ ...newOutletAddress, country: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleGeocode}
+                  disabled={geocoding}
+                  className="w-full mb-3 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {geocoding ? 'Getting Location...' : 'Auto-Get Location (Lat/Long)'}
+                </button>
+              </div>
+
+              <div className="mb-4 border-t pt-4">
+                <h4 className="text-sm font-semibold text-gray-700 mb-3">Coordinates (Optional - Auto-filled if address geocoded)</h4>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Latitude
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={newOutletCoordinates.latitude}
+                      onChange={(e) => setNewOutletCoordinates({ ...newOutletCoordinates, latitude: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
+                      placeholder="28.6139"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Longitude
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={newOutletCoordinates.longitude}
+                      onChange={(e) => setNewOutletCoordinates({ ...newOutletCoordinates, longitude: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
+                      placeholder="77.2090"
+                    />
+                  </div>
+                </div>
               </div>
               <div className="flex gap-2">
                 <button
