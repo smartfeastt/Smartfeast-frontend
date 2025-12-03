@@ -3,6 +3,41 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 const API_URL = import.meta.env.VITE_API_URL;
 
 /**
+ * Sync outlets - fetches outlets updated/created since lastSync
+ */
+export const syncOutlets = createAsyncThunk(
+  'vendorOutlets/sync',
+  async ({ token }, { getState, rejectWithValue }) => {
+    try {
+      const state = getState();
+      const lastSync = state.vendorOutlets?.lastSync || 0;
+      const since = new Date(lastSync).toISOString();
+      
+      const url = new URL(`${API_URL}/api/outlet/sync`);
+      url.searchParams.set('since', since);
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        return {
+          outlets: data.outlets || [],
+          syncedAt: data.syncedAt || new Date().toISOString(),
+        };
+      }
+      return rejectWithValue(data.message || 'Failed to sync outlets');
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+/**
  * Fetch outlets for vendor (owner or manager)
  */
 export const fetchVendorOutlets = createAsyncThunk(
@@ -142,12 +177,46 @@ export const fetchOutlet = createAsyncThunk(
   }
 );
 
+/**
+ * Merge incoming outlets with existing outlets
+ */
+const mergeOutlets = (existingById, existingAllIds, incomingOutlets) => {
+  const mergedById = { ...existingById };
+  const mergedAllIds = [...existingAllIds];
+  
+  incomingOutlets.forEach(outlet => {
+    const outletId = outlet._id || outlet.id;
+    if (!outletId) return;
+    
+    if (mergedById[outletId]) {
+      // Conflict resolution: use newer version
+      const existing = mergedById[outletId];
+      const existingTime = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
+      const newTime = new Date(outlet.updatedAt || outlet.createdAt || 0).getTime();
+      
+      if (newTime >= existingTime) {
+        mergedById[outletId] = outlet;
+      }
+    } else {
+      // New outlet
+      mergedById[outletId] = outlet;
+      if (!mergedAllIds.includes(outletId)) {
+        mergedAllIds.push(outletId);
+      }
+    }
+  });
+  
+  return { mergedById, mergedAllIds };
+};
+
 const initialState = {
   byId: {},
   allIds: [],
   loading: false,
   error: null,
   selectedOutletId: null,
+  lastSync: 0, // Timestamp of last successful sync
+  syncing: false, // Whether a sync is in progress
 };
 
 const vendorOutletsSlice = createSlice({
@@ -197,6 +266,32 @@ const vendorOutletsSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      // Sync outlets
+      .addCase(syncOutlets.pending, (state) => {
+        state.syncing = true;
+        state.error = null;
+      })
+      .addCase(syncOutlets.fulfilled, (state, action) => {
+        state.syncing = false;
+        const { outlets, syncedAt } = action.payload;
+        
+        // Merge incoming outlets
+        const { mergedById, mergedAllIds } = mergeOutlets(state.byId, state.allIds, outlets);
+        state.byId = mergedById;
+        state.allIds = mergedAllIds;
+        
+        // Update lastSync timestamp
+        if (syncedAt) {
+          state.lastSync = new Date(syncedAt).getTime();
+        } else {
+          state.lastSync = Date.now();
+        }
+      })
+      .addCase(syncOutlets.rejected, (state, action) => {
+        state.syncing = false;
+        state.error = action.payload;
+      })
+      
       // Fetch outlets
       .addCase(fetchVendorOutlets.pending, (state) => {
         state.loading = true;

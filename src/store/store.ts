@@ -11,6 +11,8 @@ import publicRestaurantReducer from './slices/publicRestaurantSlice';
 // New vendor slices
 import vendorOrdersReducer from './slices/vendorOrdersSlice';
 import vendorOutletsReducer from './slices/vendorOutletsSlice';
+import vendorMenusReducer from './slices/vendorMenusSlice';
+import vendorPaymentsReducer from './slices/vendorPaymentsSlice';
 import socketReducer from './slices/socketSlice';
 
 // User slices
@@ -40,6 +42,8 @@ export const store = configureStore({
     // New vendor slices
     vendorOrders: vendorOrdersReducer,
     vendorOutlets: vendorOutletsReducer,
+    vendorMenus: vendorMenusReducer,
+    vendorPayments: vendorPaymentsReducer,
     socket: socketReducer,
     
     // User slices

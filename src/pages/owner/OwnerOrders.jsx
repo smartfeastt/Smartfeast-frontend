@@ -13,6 +13,7 @@ import {
 } from "react-feather";
 import { useAppSelector, useAppDispatch } from "../../store/hooks.js";
 import { fetchOutletOrders, updateOrderStatus } from "../../store/slices/ordersSlice.js";
+import { useVendorSync } from "../../hooks/useVendorSync.js";
 import DynamicHeader from "../../components/headers/DynamicHeader.jsx";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -21,6 +22,9 @@ export default function OwnerOrders() {
   const { token, user } = useAppSelector((state) => state.auth);
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  
+  // Use vendor sync hook for automatic syncing
+  useVendorSync();
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [loading, setLoading] = useState(true);

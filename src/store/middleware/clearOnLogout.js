@@ -9,6 +9,8 @@ export const clearOnLogoutMiddleware = (store) => (next) => (action) => {
     const slicesToClear = [
       'vendorOrders',
       'vendorOutlets',
+      'vendorMenus',
+      'vendorPayments',
       'userOrders',
       'cart',
       'socket',

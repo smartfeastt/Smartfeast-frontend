@@ -27,6 +27,73 @@ const normalizeOrder = (order) => {
 };
 
 /**
+ * Merge incoming orders with existing orders (idempotent, handles conflicts)
+ */
+const mergeOrders = (existingById, existingAllIds, incomingOrders) => {
+  const mergedById = { ...existingById };
+  const mergedAllIds = [...existingAllIds];
+  
+  incomingOrders.forEach(order => {
+    const normalized = normalizeOrder(order);
+    const orderId = normalized.orderId;
+    
+    if (mergedById[orderId]) {
+      // Conflict resolution: use newer version
+      const existing = mergedById[orderId];
+      const existingTime = new Date(existing.updatedAt).getTime();
+      const newTime = new Date(normalized.updatedAt).getTime();
+      
+      if (newTime >= existingTime) {
+        mergedById[orderId] = normalized;
+      }
+    } else {
+      // New order
+      mergedById[orderId] = normalized;
+      if (!mergedAllIds.includes(orderId)) {
+        mergedAllIds.push(orderId);
+      }
+    }
+  });
+  
+  return { mergedById, mergedAllIds };
+};
+
+/**
+ * Sync orders - fetches orders updated/created since lastSync
+ */
+export const syncOrders = createAsyncThunk(
+  'vendorOrders/sync',
+  async ({ token }, { getState, rejectWithValue }) => {
+    try {
+      const state = getState();
+      const lastSync = state.vendorOrders?.lastSync || 0;
+      const since = new Date(lastSync).toISOString();
+      
+      const url = new URL(`${API_URL}/api/order/sync`);
+      url.searchParams.set('since', since);
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        return {
+          orders: data.orders || [],
+          syncedAt: data.syncedAt || new Date().toISOString(),
+        };
+      }
+      return rejectWithValue(data.message || 'Failed to sync orders');
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+/**
  * Fetch orders snapshot for reconciliation
  */
 export const syncOrdersSnapshot = createAsyncThunk(
@@ -135,6 +202,8 @@ const initialState = {
   lastSequenceId: null, // Highest processed socket sequence
   pendingFetchSince: null, // ISO timestamp for reconciliation
   subscribedOutlets: [], // Outlets we're subscribed to via socket
+  lastSync: 0, // Timestamp of last successful sync (for offline sync)
+  syncing: false, // Whether a sync is in progress
 };
 
 const vendorOrdersSlice = createSlice({
@@ -276,6 +345,32 @@ const vendorOrdersSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      // Sync orders (for offline sync)
+      .addCase(syncOrders.pending, (state) => {
+        state.syncing = true;
+        state.error = null;
+      })
+      .addCase(syncOrders.fulfilled, (state, action) => {
+        state.syncing = false;
+        const { orders, syncedAt } = action.payload;
+        
+        // Merge incoming orders
+        const { mergedById, mergedAllIds } = mergeOrders(state.byId, state.allIds, orders);
+        state.byId = mergedById;
+        state.allIds = mergedAllIds;
+        
+        // Update lastSync timestamp
+        if (syncedAt) {
+          state.lastSync = new Date(syncedAt).getTime();
+        } else {
+          state.lastSync = Date.now();
+        }
+      })
+      .addCase(syncOrders.rejected, (state, action) => {
+        state.syncing = false;
+        state.error = action.payload;
+      })
+      
       // Sync snapshot
       .addCase(syncOrdersSnapshot.pending, (state) => {
         state.loading = true;
