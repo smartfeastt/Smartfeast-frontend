@@ -42,6 +42,7 @@ export default function Payment() {
         deliveryAddress: orderData.deliveryAddress,
         paymentMethod: paymentData.paymentMethod,
         customerInfo: paymentData.customerInfo,
+        orderType: orderData.orderType, // Include order type
         token: token || null, // Token is optional for guest orders
       };
 

@@ -95,6 +95,7 @@ export default function OwnerOutlet() {
     }
   }
 
+
   const handleAssignManager = async (e) => {
     e.preventDefault()
     try {
@@ -150,6 +151,7 @@ export default function OwnerOutlet() {
       alert(error || 'Failed to update order status');
     }
   }
+
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>
@@ -255,7 +257,7 @@ export default function OwnerOutlet() {
                 >
                   <div className="flex justify-between items-start mb-3">
                     <div>
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <h3 className="font-semibold text-gray-900">
                           Order #{order.orderNumber}
                         </h3>
@@ -275,6 +277,21 @@ export default function OwnerOutlet() {
                           }`}
                         >
                           {order.status}
+                        </span>
+                        <span
+                          className={`px-2 py-1 text-xs rounded-full ${
+                            order.orderType === 'dine_in'
+                              ? 'bg-blue-100 text-blue-800'
+                              : order.orderType === 'takeaway'
+                              ? 'bg-purple-100 text-purple-800'
+                              : 'bg-green-100 text-green-800'
+                          }`}
+                        >
+                          {order.orderType === 'dine_in'
+                            ? 'Dine-In'
+                            : order.orderType === 'takeaway'
+                            ? 'Takeaway'
+                            : 'Delivery'}
                         </span>
                       </div>
                       <p className="text-sm text-gray-600">

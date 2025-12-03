@@ -43,6 +43,7 @@ export default function UserOrders() {
       dispatch(fetchUserOrders(token));
     });
 
+
     return () => {
       socket.disconnect();
     };
@@ -52,6 +53,8 @@ export default function UserOrders() {
     switch (status) {
       case "delivered":
         return <CheckCircle className="text-green-500" size={20} />;
+      case "ready":
+        return <Package className="text-blue-500" size={20} />;
       case "preparing":
         return <Clock className="text-yellow-500" size={20} />;
       case "cancelled":
@@ -65,6 +68,8 @@ export default function UserOrders() {
     switch (status) {
       case "delivered":
         return "text-green-600 bg-green-50";
+      case "ready":
+        return "text-blue-600 bg-blue-50";
       case "preparing":
         return "text-yellow-600 bg-yellow-50";
       case "cancelled":
@@ -72,6 +77,10 @@ export default function UserOrders() {
       default:
         return "text-gray-600 bg-gray-50";
     }
+  };
+
+  const getStatusLabel = (status) => {
+    return status.charAt(0).toUpperCase() + status.slice(1);
   };
 
   // Filter orders by active tab (moved after helper functions)
@@ -117,6 +126,8 @@ export default function UserOrders() {
                 { key: "pending", label: "Pending", count: orders.filter(o => o.status === "pending").length },
                 { key: "confirmed", label: "Confirmed", count: orders.filter(o => o.status === "confirmed").length },
                 { key: "preparing", label: "Preparing", count: orders.filter(o => o.status === "preparing").length },
+                { key: "ready", label: "Ready", count: orders.filter(o => o.status === "ready").length },
+                { key: "out_for_delivery", label: "Out for Delivery", count: orders.filter(o => o.status === "out_for_delivery").length },
                 { key: "delivered", label: "Delivered", count: orders.filter(o => o.status === "delivered").length },
                 { key: "cancelled", label: "Cancelled", count: orders.filter(o => o.status === "cancelled").length }
               ].map((tab) => (
@@ -157,7 +168,7 @@ export default function UserOrders() {
                       {getStatusIcon(order.status)}
                       <span className="font-medium text-gray-900">Order #{order.orderNumber}</span>
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
-                        {order.status.charAt(0).toUpperCase() + order.status.slice(1).replace('_', ' ')}
+                        {getStatusLabel(order.status)}
                       </span>
                     </div>
                     <h3 className="text-lg font-semibold text-gray-900">
@@ -197,11 +208,6 @@ export default function UserOrders() {
                   <p className="text-sm text-gray-600">
                     <strong>Payment:</strong> {order.paymentMethod} ({order.paymentStatus})
                   </p>
-                  {order.status === "delivered" && order.updatedAt && (
-                    <p className="text-sm text-gray-600 mt-2">
-                      Delivered on {new Date(order.updatedAt).toLocaleString()}
-                    </p>
-                  )}
                 </div>
 
                 {/* Action Buttons */}

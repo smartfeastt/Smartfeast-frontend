@@ -19,6 +19,7 @@ export default function Checkout() {
   });
   
   const [paymentMethod, setPaymentMethod] = useState("card");
+  const [orderType, setOrderType] = useState(""); // Required field
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -39,6 +40,12 @@ export default function Checkout() {
     // Validate required fields
     if (!customerInfo.name || !customerInfo.email || !customerInfo.phone || !customerInfo.address) {
       alert("Please fill in all required fields (Name, Email, Phone, and Address)");
+      return;
+    }
+
+    // Validate order type
+    if (!orderType) {
+      alert("Please select an order type (Dine-In, Takeaway, or Delivery)");
       return;
     }
 
@@ -66,6 +73,7 @@ export default function Checkout() {
       totalPrice: finalTotal,
       deliveryAddress: customerInfo.address,
       paymentMethod: paymentMethod,
+      orderType: orderType,
     };
 
     const paymentData = {
@@ -182,6 +190,51 @@ export default function Checkout() {
                   rows="3"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black focus:border-black"
                 />
+              </div>
+
+              {/* Order Type */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Order Type *
+                </label>
+                <div className="space-y-2">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="orderType"
+                      value="dine_in"
+                      checked={orderType === "dine_in"}
+                      onChange={(e) => setOrderType(e.target.value)}
+                      className="mr-2"
+                      required
+                    />
+                    Dine-In
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="orderType"
+                      value="takeaway"
+                      checked={orderType === "takeaway"}
+                      onChange={(e) => setOrderType(e.target.value)}
+                      className="mr-2"
+                      required
+                    />
+                    Takeaway / Pick-Up
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="orderType"
+                      value="delivery"
+                      checked={orderType === "delivery"}
+                      onChange={(e) => setOrderType(e.target.value)}
+                      className="mr-2"
+                      required
+                    />
+                    Delivery
+                  </label>
+                </div>
               </div>
 
               {/* Payment Method */}

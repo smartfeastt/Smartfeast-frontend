@@ -96,6 +96,7 @@ export default function OwnerRestaurant() {
     }
   }
 
+  // Handle image selection
   const handleCreateOutlet = async (e) => {
     e.preventDefault()
     try {
@@ -430,6 +431,7 @@ export default function OwnerRestaurant() {
                   </div>
                 </div>
               </div>
+
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -442,7 +444,7 @@ export default function OwnerRestaurant() {
                   type="submit"
                   className="flex-1 px-4 py-2 bg-black text-white rounded hover:bg-gray-800"
                 >
-                  Create
+                  {uploadingImage ? 'Uploading Image...' : 'Create'}
                 </button>
               </div>
             </form>

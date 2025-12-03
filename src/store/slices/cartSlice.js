@@ -139,6 +139,13 @@ const cartSlice = createSlice({
     setTable: (state, action) => {
       state.table = action.payload;
     },
+    clearSlice: (state) => {
+      state.items = [];
+      state.isOpen = false;
+      state.table = null;
+      state.syncing = false;
+      localStorage.removeItem('smartfeast_cart');
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -173,7 +180,8 @@ export const {
   setCartItems,
   toggleCart,
   setCartOpen,
-  setTable
+  setTable,
+  clearSlice
 } = cartSlice.actions;
 
 // Selectors

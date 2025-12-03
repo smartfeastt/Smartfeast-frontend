@@ -83,6 +83,14 @@ const authSlice = createSlice({
       localStorage.removeItem('smartfeast_token');
       localStorage.removeItem('smartfeast_user');
     },
+    clearSlice: (state) => {
+      state.user = null;
+      state.token = null;
+      state.loading = false;
+      state.error = null;
+      localStorage.removeItem('smartfeast_token');
+      localStorage.removeItem('smartfeast_user');
+    },
     setAuth: (state, action) => {
       const { token, user } = action.payload;
       state.token = token;
@@ -114,6 +122,6 @@ const authSlice = createSlice({
   },
 });
 
-export const { logout, setAuth, updateUser } = authSlice.actions;
+export const { logout, setAuth, updateUser, clearSlice } = authSlice.actions;
 export default authSlice.reducer;
 

@@ -5,7 +5,7 @@ const API_URL = import.meta.env.VITE_API_URL;
 // Async thunk to create order
 export const createOrder = createAsyncThunk(
   'orders/create',
-  async ({ items, totalPrice, deliveryAddress, paymentMethod, customerInfo, token }, { rejectWithValue }) => {
+  async ({ items, totalPrice, deliveryAddress, paymentMethod, customerInfo, orderType, token }, { rejectWithValue }) => {
     try {
       const headers = {
         'Content-Type': 'application/json',
@@ -25,6 +25,7 @@ export const createOrder = createAsyncThunk(
           deliveryAddress,
           paymentMethod,
           customerInfo, // Required for guest orders
+          orderType, // Order type: dine_in, takeaway, or delivery
         }),
       });
       const data = await response.json();

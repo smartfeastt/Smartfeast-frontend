@@ -143,6 +143,13 @@ const menuSlice = createSlice({
         };
       }
     },
+    clearSlice: (state) => {
+      state.outlets = {};
+      state.currentOutlet = null;
+      state.loading = false;
+      state.error = null;
+      state.filters = {};
+    },
   },
   
   extraReducers: (builder) => {
@@ -188,6 +195,7 @@ export const {
   toggleDiet,
   setCategory,
   clearFilters,
+  clearSlice,
 } = menuSlice.actions;
 
 // Selectors

@@ -28,6 +28,7 @@ export default function OwnerOrders() {
     status: "all",
     restaurant: "all",
     outlet: "all",
+    orderType: "all",
     dateRange: "today",
     searchQuery: ""
   });
@@ -104,6 +105,7 @@ export default function OwnerOrders() {
                 ...order,
                 restaurantName: outletToRestaurantMap[outlet._id] || 'Unknown',
                 outletName: outlet.name,
+                orderType: order.orderType || 'delivery', // Default to delivery for backward compatibility
               }));
               allOrders.push(...ordersWithInfo);
             }
@@ -129,6 +131,7 @@ export default function OwnerOrders() {
           orderDate: new Date(order.createdAt),
           paymentMethod: order.paymentMethod,
           deliveryAddress: order.deliveryAddress,
+          orderType: order.orderType || 'delivery', // Default to delivery for backward compatibility
         }));
         
         setOrders(transformedOrders);
@@ -160,6 +163,11 @@ export default function OwnerOrders() {
     // Outlet filter
     if (filters.outlet !== "all") {
       filtered = filtered.filter(order => order.outlet === filters.outlet);
+    }
+
+    // Order type filter
+    if (filters.orderType !== "all") {
+      filtered = filtered.filter(order => order.orderType === filters.orderType);
     }
 
     // Search filter
@@ -291,7 +299,7 @@ export default function OwnerOrders() {
 
         {/* Filters */}
         <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
               <input
@@ -366,6 +374,53 @@ export default function OwnerOrders() {
               <option value="all">All Time</option>
             </select>
           </div>
+          
+          {/* Order Type Filter Bar */}
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-medium text-gray-700">Order Type:</span>
+              <button
+                onClick={() => setFilters(prev => ({ ...prev, orderType: "all" }))}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  filters.orderType === "all"
+                    ? "bg-black text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setFilters(prev => ({ ...prev, orderType: "dine_in" }))}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  filters.orderType === "dine_in"
+                    ? "bg-black text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                Dine-In
+              </button>
+              <button
+                onClick={() => setFilters(prev => ({ ...prev, orderType: "takeaway" }))}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  filters.orderType === "takeaway"
+                    ? "bg-black text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                Takeaway
+              </button>
+              <button
+                onClick={() => setFilters(prev => ({ ...prev, orderType: "delivery" }))}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  filters.orderType === "delivery"
+                    ? "bg-black text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                Delivery
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Orders List */}
@@ -396,6 +451,19 @@ export default function OwnerOrders() {
                   <div className="flex items-center gap-3">
                     <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(order.status)}`}>
                       {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                    </span>
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                      order.orderType === 'dine_in' 
+                        ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                        : order.orderType === 'takeaway'
+                        ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                        : 'bg-green-100 text-green-800 border border-green-200'
+                    }`}>
+                      {order.orderType === 'dine_in' 
+                        ? 'Dine-In' 
+                        : order.orderType === 'takeaway'
+                        ? 'Takeaway'
+                        : 'Delivery'}
                     </span>
                     <span className="text-lg font-bold text-gray-900">₹{order.total}</span>
                   </div>

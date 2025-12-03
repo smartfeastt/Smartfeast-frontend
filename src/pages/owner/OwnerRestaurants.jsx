@@ -57,7 +57,6 @@ export default function OwnerDashboard() {
   // Handle create restaurant
   const handleCreateRestaurant = async (e) => {
     e.preventDefault();
-    
     const result = await dispatch(
       createRestaurant({
         token,
@@ -77,10 +76,14 @@ export default function OwnerDashboard() {
     }
   };
 
-  // Clear errors when modal closes
+  // Clear errors and form when modal closes
   useEffect(() => {
     if (!showCreateModal) {
       dispatch(clearRestaurantError());
+      setNewRestaurantName('');
+      setOutletCount(3);
+      setRestaurantImage(null);
+      setRestaurantImagePreview(null);
     }
   }, [showCreateModal, dispatch]);
 
@@ -259,6 +262,32 @@ export default function OwnerDashboard() {
                   required
                   disabled={createLoading}
                 />
+              </div>
+
+              {/* Restaurant Image Upload */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Restaurant Profile Image
+                </label>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/webp"
+                  onChange={handleImageSelect}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black focus:border-black"
+                  disabled={createLoading || uploadingImage}
+                />
+                {restaurantImagePreview && (
+                  <div className="mt-3">
+                    <img
+                      src={restaurantImagePreview}
+                      alt="Preview"
+                      className="w-full h-48 object-cover rounded-lg border border-gray-300"
+                    />
+                  </div>
+                )}
+                <p className="text-xs text-gray-500 mt-1">
+                  Max size: 5MB. Accepted formats: JPEG, PNG, WebP
+                </p>
               </div>
               
               <div className="flex gap-2">
