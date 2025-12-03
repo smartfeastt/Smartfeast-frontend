@@ -5,6 +5,8 @@ import menuReducer from './slices/menuSlice';
 import ordersReducer from './slices/ordersSlice';
 import themeReducer from './slices/themeSlice';
 import toastReducer from './slices/toastSlice';
+import restaurantReducer from './slices/restaurantSlice'
+import publicRestaurantReducer from "./slices/publicRestaurantSlice"
 
 export const store = configureStore({
   reducer: {
@@ -14,6 +16,8 @@ export const store = configureStore({
     orders: ordersReducer,
     theme: themeReducer,
     toast: toastReducer,
+    restaurant:restaurantReducer,
+    publicRestaurant:publicRestaurantReducer
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

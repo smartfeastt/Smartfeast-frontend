@@ -31,43 +31,62 @@ export default function Payment() {
   const tax = totalPrice * 0.05;
   const finalTotal = totalPrice + deliveryFee + tax;
 
-  const handlePayment = async () => {
-    if (!token) {
-      alert("Please sign in to complete payment");
-      navigate("/user/signin");
-      return;
-    }
-
+  const handlePayment = async (payNow = true) => {
     setIsProcessing(true);
 
     try {
-      // Simulate payment processing delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Create order with payment status
+      // Create order first (payment status will be pending)
       const orderPayload = {
         items: orderData.items,
         totalPrice: finalTotal,
         deliveryAddress: orderData.deliveryAddress,
         paymentMethod: paymentData.paymentMethod,
-        token,
+        customerInfo: paymentData.customerInfo,
+        token: token || null, // Token is optional for guest orders
       };
 
       const order = await dispatch(createOrder(orderPayload)).unwrap();
       
-      // Clear cart after successful order
-      dispatch(clearCart());
-      
-      // Redirect to success page with order details
-      navigate("/payment/success", {
-        state: {
-          orderId: order._id,
-          orderNumber: order.orderNumber,
-          totalPrice: finalTotal,
+      if (payNow) {
+        // Update payment status to paid
+        const API_URL = import.meta.env.VITE_API_URL;
+        const response = await fetch(`${API_URL}/api/order/${order._id}/payment`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ paymentStatus: 'paid' }),
+        });
+
+        const data = await response.json();
+        if (!data.success) {
+          throw new Error('Failed to update payment status');
         }
-      });
+
+        // Clear cart after successful payment
+        dispatch(clearCart());
+        
+        // Redirect to payment verification page
+        navigate(`/payment/verify/${order._id}`, {
+          state: {
+            orderId: order._id,
+            orderNumber: order.orderNumber,
+            totalPrice: finalTotal,
+          }
+        });
+      } else {
+        // User chose not to pay - redirect to payment verification to check status
+        navigate(`/payment/verify/${order._id}`, {
+          state: {
+            orderId: order._id,
+            orderNumber: order.orderNumber,
+            totalPrice: finalTotal,
+            paymentPending: true,
+          }
+        });
+      }
     } catch (error) {
-      alert(error || "Payment failed. Please try again.");
+      alert(error || "Order creation failed. Please try again.");
       setIsProcessing(false);
     }
   };
@@ -186,30 +205,38 @@ export default function Payment() {
             </div>
           </div>
 
-          {/* Payment Button */}
-          <button
-            onClick={handlePayment}
-            disabled={isProcessing}
-            className="w-full bg-black text-white py-4 rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold"
-          >
-            {isProcessing ? (
-              <>
-                <Loader className="animate-spin" size={20} />
-                Processing Payment...
-              </>
-            ) : (
-              <>
-                <CheckCircle size={20} />
-                {paymentData.paymentMethod === "cod" ? "Confirm Order" : "Pay ₹" + finalTotal.toFixed(2)}
-              </>
-            )}
-          </button>
+          {/* Payment Buttons */}
+          <div className="space-y-3">
+            <button
+              onClick={() => handlePayment(true)}
+              disabled={isProcessing}
+              className="w-full bg-black text-white py-4 rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader className="animate-spin" size={20} />
+                  Processing Payment...
+                </>
+              ) : (
+                <>
+                  <CheckCircle size={20} />
+                  Pay ₹{finalTotal.toFixed(2)}
+                </>
+              )}
+            </button>
 
-          {paymentData.paymentMethod !== "cod" && (
-            <p className="text-xs text-gray-500 text-center mt-4">
-              This is a demo payment. No actual charges will be made.
-            </p>
-          )}
+            <button
+              onClick={() => handlePayment(false)}
+              disabled={isProcessing}
+              className="w-full bg-gray-200 text-gray-800 py-4 rounded-md hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold"
+            >
+              Not Pay Now
+            </button>
+          </div>
+
+          <p className="text-xs text-gray-500 text-center mt-4">
+            This is a demo payment system. Click "Pay" to mark order as paid, or "Not Pay Now" to keep it pending.
+          </p>
         </div>
       </div>
     </div>

@@ -13,11 +13,14 @@ import ViewOutlet from "./pages/ViewOutlet.jsx";
 import Cart from "./pages/Cart.jsx";
 import Checkout from "./pages/Checkout.jsx";
 import Payment from "./pages/Payment.jsx";
+import PaymentVerify from "./pages/PaymentVerify.jsx";
 import SuccessPayment from "./pages/SuccessPayment.jsx";
 import UserSignIn from "./pages/user/UserSignIn.jsx";
 import UserSignUp from "./pages/user/UserSignUp.jsx";
 import UserProfile from "./pages/user/UserProfile.jsx";
 import UserOrders from "./pages/user/UserOrders.jsx";
+import UserFavorites from "./pages/user/UserFavorites.jsx";
+import UserAddresses from "./pages/user/UserAddresses.jsx";
 import UserSettings from "./pages/user/UserSettings.jsx";
 
 
@@ -73,13 +76,15 @@ export default function App() {
             <Route path="/cart" element={<Cart />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/payment" element={<Payment />} />
+            <Route path="/payment/verify/:orderId" element={<PaymentVerify />} />
             <Route path="/payment/success" element={<SuccessPayment />} />
             
             {/* User Routes */}
             <Route path="/user/profile" element={<UserProfile />} />
             <Route path="/user/orders" element={<UserOrders />} />
+            <Route path="/user/favorites" element={<UserFavorites />} />
+            <Route path="/user/addresses" element={<UserAddresses />} />
             <Route path="/user/settings" element={<UserSettings />} />
-            <Route path="/user/favorites" element={<UserOrders />} />
 
           <Route element={<ProtectedRoute role="owner"/>}>
             {/* Owner Routes */}

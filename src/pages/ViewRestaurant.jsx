@@ -1,18 +1,28 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { MapPin, ArrowRight, ArrowLeft } from 'react-feather'
+import { MapPin, ArrowRight, ArrowLeft, Heart } from 'react-feather'
+import { useAppSelector } from '../store/hooks.js'
 import DynamicHeader from '../components/headers/DynamicHeader.jsx'
 
 const API_URL = import.meta.env.VITE_API_URL;
 
 export default function ViewRestaurant() {
   const { restaurantName } = useParams()
+  const { token, user } = useAppSelector((state) => state.auth)
   const [restaurant, setRestaurant] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [isFavorite, setIsFavorite] = useState(false)
+  const [favoriteLoading, setFavoriteLoading] = useState(false)
 
   useEffect(() => {
     fetchRestaurant()
   }, [restaurantName])
+
+  useEffect(() => {
+    if (restaurant && token && user?.type === 'user') {
+      checkFavorite()
+    }
+  }, [restaurant, token, user])
 
   const fetchRestaurant = async () => {
     try {
@@ -25,6 +35,64 @@ export default function ViewRestaurant() {
       console.error('Error fetching restaurant:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const checkFavorite = async () => {
+    if (!restaurant?._id) return
+    try {
+      const response = await fetch(`${API_URL}/api/favorite/check/${restaurant._id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+      const data = await response.json()
+      if (data.success) {
+        setIsFavorite(data.isFavorite)
+      }
+    } catch (error) {
+      console.error('Error checking favorite:', error)
+    }
+  }
+
+  const toggleFavorite = async () => {
+    if (!restaurant?._id || !token || user?.type !== 'user') {
+      alert('Please sign in to add favorites')
+      return
+    }
+    
+    try {
+      setFavoriteLoading(true)
+      if (isFavorite) {
+        const response = await fetch(`${API_URL}/api/favorite/${restaurant._id}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        })
+        const data = await response.json()
+        if (data.success) {
+          setIsFavorite(false)
+        }
+      } else {
+        const response = await fetch(`${API_URL}/api/favorite`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({ restaurantId: restaurant._id }),
+        })
+        const data = await response.json()
+        if (data.success) {
+          setIsFavorite(true)
+        }
+      }
+    } catch (error) {
+      console.error('Error toggling favorite:', error)
+      alert('Failed to update favorite. Please try again.')
+    } finally {
+      setFavoriteLoading(false)
     }
   }
 
@@ -63,7 +131,23 @@ export default function ViewRestaurant() {
       {/* Restaurant Header */}
       <div className="bg-white">
         <div className="max-w-7xl mx-auto px-4 py-6">
-          <h1 className="text-3xl font-bold text-gray-900">{restaurant.name}</h1>
+          <div className="flex justify-between items-center">
+            <h1 className="text-3xl font-bold text-gray-900">{restaurant.name}</h1>
+            {user?.type === 'user' && (
+              <button
+                onClick={toggleFavorite}
+                disabled={favoriteLoading}
+                className={`p-3 rounded-full transition-colors ${
+                  isFavorite
+                    ? 'bg-red-50 text-red-500 hover:bg-red-100'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+                title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+              >
+                <Heart size={24} className={isFavorite ? 'fill-current' : ''} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

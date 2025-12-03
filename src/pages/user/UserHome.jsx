@@ -1,36 +1,34 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Search, MapPin, Star, Clock } from "react-feather";
+import { useAppSelector, useAppDispatch } from "../../store/hooks.js";
 import DynamicHeader from "../../components/headers/DynamicHeader.jsx";
-
-const API_URL = import.meta.env.VITE_API_URL;
+import {
+  fetchPublicRestaurants,
+  setSearchQuery,
+  selectFilteredRestaurants,
+  selectPublicRestaurantLoading,
+  selectPublicRestaurantError,
+  selectSearchQuery,
+  selectIsDataStale,
+} from "../../store/slices/publicRestaurantSlice.js";
 
 export default function UserHome() {
-  const [restaurants, setRestaurants] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
+  const dispatch = useAppDispatch();
 
+  // Redux state
+  const filteredRestaurants = useAppSelector(selectFilteredRestaurants);
+  const loading = useAppSelector(selectPublicRestaurantLoading);
+  const error = useAppSelector(selectPublicRestaurantError);
+  const searchQuery = useAppSelector(selectSearchQuery);
+  const isDataStale = useAppSelector(selectIsDataStale);
+
+  // Fetch restaurants on mount or if data is stale
   useEffect(() => {
-    fetchRestaurants();
-  }, []);
-
-  const fetchRestaurants = async () => {
-    try {
-      const response = await fetch(`${API_URL}/api/restaurant/all`);
-      const data = await response.json();
-      if (data.success) {
-        setRestaurants(data.restaurants || []);
-      }
-    } catch (error) {
-      console.error("Error fetching restaurants:", error);
-    } finally {
-      setLoading(false);
+    if (isDataStale) {
+      dispatch(fetchPublicRestaurants());
     }
-  };
-
-  const filteredRestaurants = restaurants.filter(restaurant =>
-    restaurant.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  }, [dispatch, isDataStale]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -54,7 +52,7 @@ export default function UserHome() {
               type="text"
               placeholder="Search for restaurants..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => dispatch(setSearchQuery(e.target.value))}
               className="w-full pl-12 pr-4 py-4 text-gray-900 rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-white"
             />
           </div>
@@ -67,6 +65,13 @@ export default function UserHome() {
           <h2 className="text-3xl font-bold text-gray-900 mb-8">
             {searchQuery ? `Search Results for "${searchQuery}"` : "Featured Restaurants"}
           </h2>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+              {error}
+            </div>
+          )}
           
           {loading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

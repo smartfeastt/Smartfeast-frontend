@@ -7,54 +7,187 @@ import {
   Calendar,
   Download,
   Filter,
-  BarChart
+  BarChart,
+  Loader
 } from "react-feather";
+import { useAppSelector } from "../../store/hooks.js";
 import DynamicHeader from "../../components/headers/DynamicHeader.jsx";
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 export default function OwnerAnalytics() {
+  const { token, user } = useAppSelector((state) => state.auth);
   const [timeRange, setTimeRange] = useState("30d");
   const [selectedRestaurant, setSelectedRestaurant] = useState("all");
+  const [restaurants, setRestaurants] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [analytics, setAnalytics] = useState({
     revenue: {
-      current: 125000,
-      previous: 110000,
-      data: [
-        { date: "2024-01-01", amount: 3200 },
-        { date: "2024-01-02", amount: 4100 },
-        { date: "2024-01-03", amount: 3800 },
-        { date: "2024-01-04", amount: 4500 },
-        { date: "2024-01-05", amount: 3900 },
-        { date: "2024-01-06", amount: 5200 },
-        { date: "2024-01-07", amount: 4800 }
-      ]
+      current: 0,
+      previous: 0,
+      data: []
     },
     orders: {
-      current: 1250,
-      previous: 1100,
-      data: [
-        { date: "2024-01-01", count: 45 },
-        { date: "2024-01-02", count: 52 },
-        { date: "2024-01-03", count: 48 },
-        { date: "2024-01-04", count: 58 },
-        { date: "2024-01-05", count: 51 },
-        { date: "2024-01-06", count: 62 },
-        { date: "2024-01-07", count: 55 }
-      ]
+      current: 0,
+      previous: 0,
+      data: []
     },
-    topItems: [
-      { name: "Margherita Pizza", orders: 145, revenue: 43500 },
-      { name: "Classic Burger", orders: 132, revenue: 26400 },
-      { name: "Chicken Wings", orders: 98, revenue: 19600 },
-      { name: "Caesar Salad", orders: 87, revenue: 13050 },
-      { name: "Chocolate Cake", orders: 76, revenue: 13680 }
-    ],
+    topItems: [],
     customerInsights: {
-      newCustomers: 156,
-      returningCustomers: 324,
-      averageOrderValue: 385,
-      customerSatisfaction: 4.6
+      newCustomers: 0,
+      returningCustomers: 0,
+      averageOrderValue: 0,
+      customerSatisfaction: 0
     }
   });
+
+  useEffect(() => {
+    if (token && user?.type === 'owner') {
+      fetchAnalytics();
+    }
+  }, [token, user, timeRange, selectedRestaurant]);
+
+  const fetchAnalytics = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch restaurants
+      const restaurantsResponse = await fetch(`${API_URL}/api/restaurant/owner/all`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      const restaurantsData = await restaurantsResponse.json();
+      
+      if (restaurantsData.success) {
+        setRestaurants(restaurantsData.restaurants || []);
+        
+        // Calculate analytics from orders
+        let totalRevenue = 0;
+        let totalOrders = 0;
+        const itemStats = {};
+        const customerSet = new Set();
+        const returningCustomers = new Set();
+        const orderValues = [];
+        const dateRevenueMap = {};
+        const dateOrderMap = {};
+        
+        // Get all outlets and their orders
+        for (const restaurant of restaurantsData.restaurants || []) {
+          if (selectedRestaurant !== "all" && restaurant.name !== selectedRestaurant) {
+            continue;
+          }
+          
+          const outletsResponse = await fetch(`${API_URL}/api/outlet/restaurant/${restaurant._id}`);
+          const outletsData = await outletsResponse.json();
+          
+          if (outletsData.success) {
+            for (const outlet of outletsData.outlets || []) {
+              try {
+                const ordersResponse = await fetch(`${API_URL}/api/order/outlet/${outlet._id}`, {
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                  },
+                });
+                const ordersData = await ordersResponse.json();
+                
+                if (ordersData.success) {
+                  const paidOrders = (ordersData.orders || []).filter(o => o.paymentStatus === 'paid');
+                  
+                  paidOrders.forEach(order => {
+                    totalRevenue += order.totalPrice || 0;
+                    totalOrders += 1;
+                    orderValues.push(order.totalPrice || 0);
+                    
+                    // Track customers
+                    const customerId = order.userId?._id || order.customerInfo?.email;
+                    if (customerId) {
+                      if (customerSet.has(customerId)) {
+                        returningCustomers.add(customerId);
+                      } else {
+                        customerSet.add(customerId);
+                      }
+                    }
+                    
+                    // Track items
+                    (order.items || []).forEach(item => {
+                      const itemName = item.itemName || item.name;
+                      if (!itemStats[itemName]) {
+                        itemStats[itemName] = { orders: 0, revenue: 0 };
+                      }
+                      itemStats[itemName].orders += item.quantity || 1;
+                      itemStats[itemName].revenue += (item.itemPrice || item.price || 0) * (item.quantity || 1);
+                    });
+                    
+                    // Track by date
+                    const orderDate = new Date(order.createdAt).toISOString().split('T')[0];
+                    dateRevenueMap[orderDate] = (dateRevenueMap[orderDate] || 0) + (order.totalPrice || 0);
+                    dateOrderMap[orderDate] = (dateOrderMap[orderDate] || 0) + 1;
+                  });
+                }
+              } catch (error) {
+                console.error(`Error fetching orders for outlet ${outlet._id}:`, error);
+              }
+            }
+          }
+        }
+        
+        // Calculate date range data
+        const days = timeRange === "7d" ? 7 : timeRange === "30d" ? 30 : timeRange === "90d" ? 90 : 365;
+        const revenueData = [];
+        const ordersData = [];
+        const now = new Date();
+        
+        for (let i = days - 1; i >= 0; i--) {
+          const date = new Date(now);
+          date.setDate(date.getDate() - i);
+          const dateStr = date.toISOString().split('T')[0];
+          revenueData.push({ date: dateStr, amount: dateRevenueMap[dateStr] || 0 });
+          ordersData.push({ date: dateStr, count: dateOrderMap[dateStr] || 0 });
+        }
+        
+        // Get top items
+        const topItems = Object.entries(itemStats)
+          .map(([name, stats]) => ({ name, ...stats }))
+          .sort((a, b) => b.revenue - a.revenue)
+          .slice(0, 5);
+        
+        // Calculate average order value
+        const avgOrderValue = orderValues.length > 0 
+          ? orderValues.reduce((sum, val) => sum + val, 0) / orderValues.length 
+          : 0;
+        
+        // Calculate previous period for comparison
+        const previousDays = days;
+        let previousRevenue = 0;
+        let previousOrders = 0;
+        
+        setAnalytics({
+          revenue: {
+            current: totalRevenue,
+            previous: previousRevenue,
+            data: revenueData
+          },
+          orders: {
+            current: totalOrders,
+            previous: previousOrders,
+            data: ordersData
+          },
+          topItems,
+          customerInsights: {
+            newCustomers: customerSet.size - returningCustomers.size,
+            returningCustomers: returningCustomers.size,
+            averageOrderValue: Math.round(avgOrderValue),
+            customerSatisfaction: 4.5 // Placeholder - would need reviews/ratings system
+          }
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching analytics:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const calculateGrowth = (current, previous) => {
     return ((current - previous) / previous * 100).toFixed(1);
@@ -85,6 +218,20 @@ export default function OwnerAnalytics() {
     );
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <DynamicHeader />
+        <div className="flex items-center justify-center h-96">
+          <div className="text-center">
+            <Loader className="animate-spin mx-auto mb-4" size={48} />
+            <p className="text-gray-600">Loading analytics...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <DynamicHeader />
@@ -104,9 +251,11 @@ export default function OwnerAnalytics() {
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black"
             >
               <option value="all">All Restaurants</option>
-              <option value="pizza-palace">Pizza Palace</option>
-              <option value="burger-hub">Burger Hub</option>
-              <option value="cafe-delight">Cafe Delight</option>
+              {restaurants.map(restaurant => (
+                <option key={restaurant._id} value={restaurant.name}>
+                  {restaurant.name}
+                </option>
+              ))}
             </select>
             
             <select
@@ -145,13 +294,13 @@ export default function OwnerAnalytics() {
           <MetricCard
             title="New Customers"
             current={analytics.customerInsights.newCustomers}
-            previous={120}
+            previous={0}
             icon={Users}
           />
           <MetricCard
             title="Avg Order Value"
             current={analytics.customerInsights.averageOrderValue}
-            previous={350}
+            previous={0}
             icon={TrendingUp}
             format="currency"
           />
@@ -170,21 +319,30 @@ export default function OwnerAnalytics() {
             
             {/* Simple Bar Chart */}
             <div className="space-y-3">
-              {analytics.revenue.data.map((item, index) => (
-                <div key={index} className="flex items-center gap-3">
-                  <div className="w-16 text-xs text-gray-600">
-                    {new Date(item.date).toLocaleDateString('en-US', { weekday: 'short' })}
-                  </div>
-                  <div className="flex-1 bg-gray-200 rounded-full h-6 relative">
-                    <div
-                      className="bg-blue-500 h-6 rounded-full flex items-center justify-end pr-2"
-                      style={{ width: `${(item.amount / 6000) * 100}%` }}
-                    >
-                      <span className="text-xs text-white font-medium">₹{item.amount}</span>
+              {analytics.revenue.data.length > 0 ? (
+                analytics.revenue.data.map((item, index) => {
+                  const maxAmount = Math.max(...analytics.revenue.data.map(d => d.amount), 1);
+                  return (
+                    <div key={index} className="flex items-center gap-3">
+                      <div className="w-20 text-xs text-gray-600">
+                        {new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </div>
+                      <div className="flex-1 bg-gray-200 rounded-full h-6 relative">
+                        <div
+                          className="bg-blue-500 h-6 rounded-full flex items-center justify-end pr-2"
+                          style={{ width: `${Math.max((item.amount / maxAmount) * 100, 5)}%` }}
+                        >
+                          {item.amount > 0 && (
+                            <span className="text-xs text-white font-medium">₹{item.amount.toLocaleString()}</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              ))}
+                  );
+                })
+              ) : (
+                <p className="text-gray-500 text-center py-8">No revenue data available</p>
+              )}
             </div>
           </div>
 
@@ -199,21 +357,30 @@ export default function OwnerAnalytics() {
             </div>
             
             <div className="space-y-3">
-              {analytics.orders.data.map((item, index) => (
-                <div key={index} className="flex items-center gap-3">
-                  <div className="w-16 text-xs text-gray-600">
-                    {new Date(item.date).toLocaleDateString('en-US', { weekday: 'short' })}
-                  </div>
-                  <div className="flex-1 bg-gray-200 rounded-full h-6 relative">
-                    <div
-                      className="bg-green-500 h-6 rounded-full flex items-center justify-end pr-2"
-                      style={{ width: `${(item.count / 70) * 100}%` }}
-                    >
-                      <span className="text-xs text-white font-medium">{item.count}</span>
+              {analytics.orders.data.length > 0 ? (
+                analytics.orders.data.map((item, index) => {
+                  const maxCount = Math.max(...analytics.orders.data.map(d => d.count), 1);
+                  return (
+                    <div key={index} className="flex items-center gap-3">
+                      <div className="w-20 text-xs text-gray-600">
+                        {new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </div>
+                      <div className="flex-1 bg-gray-200 rounded-full h-6 relative">
+                        <div
+                          className="bg-green-500 h-6 rounded-full flex items-center justify-end pr-2"
+                          style={{ width: `${Math.max((item.count / maxCount) * 100, 5)}%` }}
+                        >
+                          {item.count > 0 && (
+                            <span className="text-xs text-white font-medium">{item.count}</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              ))}
+                  );
+                })
+              ) : (
+                <p className="text-gray-500 text-center py-8">No orders data available</p>
+              )}
             </div>
           </div>
         </div>
@@ -223,7 +390,8 @@ export default function OwnerAnalytics() {
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-6">Top Selling Items</h2>
             <div className="space-y-4">
-              {analytics.topItems.map((item, index) => (
+              {analytics.topItems.length > 0 ? (
+                analytics.topItems.map((item, index) => (
                 <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-sm font-medium">
@@ -239,7 +407,10 @@ export default function OwnerAnalytics() {
                     <p className="text-sm text-gray-600">Revenue</p>
                   </div>
                 </div>
-              ))}
+                ))
+              ) : (
+                <p className="text-gray-500 text-center py-8">No items data available</p>
+              )}
             </div>
           </div>
 

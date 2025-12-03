@@ -3,145 +3,89 @@ import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, Star, Clock, Search, Plus } from "react-feather";
 import { useAppSelector, useAppDispatch } from "../store/hooks.js";
 import { addToCart } from "../store/slices/cartSlice.js";
+import {
+  fetchMenuItems,
+  fetchCategories,
+  setCurrentOutlet,
+  setSearch,
+  setMaxPrice,
+  setMinRating,
+  setSpicy,
+  toggleDiet as toggleDietAction,
+  setCategory,
+  selectMenuItems,
+  selectCategories,
+  selectOutlet,
+  selectMenuLoading,
+  selectMenuFilters,
+  selectFilteredItems,
+  selectHasOutletData,
+} from "../store/slices/menuSlice.js";
 import DynamicHeader from "../components/headers/DynamicHeader.jsx";
-
-const API_URL = import.meta.env.VITE_API_URL;
 
 export default function ViewOutlet() {
   const { restaurantName, outletName } = useParams();
-  const { token } = useAppSelector((state) => state.auth);
   const dispatch = useAppDispatch();
 
-  // -------------------------------
-  // ALL HOOKS (ALWAYS IN SAME ORDER)
-  // -------------------------------
-  const [items, setItems] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [outlet, setOutlet] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // Get data from Redux
+  const items = useAppSelector(selectMenuItems);
+  const categories = useAppSelector(selectCategories);
+  const outlet = useAppSelector(selectOutlet);
+  const loading = useAppSelector(selectMenuLoading);
+  const filters = useAppSelector(selectMenuFilters);
+  const filteredItems = useAppSelector(selectFilteredItems);
+  const hasData = useAppSelector(selectHasOutletData(restaurantName, outletName));
 
+  // Local state for active tab
   const [active, setActive] = useState("All");
 
-  // Dynamic tabs based on categories from both Category model and actual items
+  // Dynamic tabs based on categories
   const tabs = useMemo(() => {
-    // Get category names from Category model
     const categoryNames = new Set(categories.map(cat => cat.name.trim()));
     
-    // Also get unique categories from items
     items.forEach(item => {
       if (item.category && item.category.trim()) {
         categoryNames.add(item.category.trim());
       }
     });
     
-    // Convert to array and sort
     const categoryTabs = Array.from(categoryNames).sort();
     return ["All", ...categoryTabs];
   }, [categories, items]);
 
-  const [q, setQ] = useState("");
-  const [maxPrice, setMaxPrice] = useState(null);
-  const [minRating, setMinRating] = useState(0);
-  const [spicy, setSpicy] = useState(null);
-  const [diet, setDiet] = useState(new Set());
-
-  // -------------------------------
-  // FETCH OUTLET ITEMS AND CATEGORIES
-  // -------------------------------
+  // Set current outlet and fetch data if needed
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        // Fetch items and outlet
-        const response = await fetch(
-          `${API_URL}/api/item/view/${restaurantName}/${outletName}`,
-          {
-            method: "GET",
-            headers: {
-              "Content-Type": "application/json",
-            },
-          }
-        );
-
-        const data = await response.json();
-
-        if (data.success) {
-          setItems(data.items || []);
-          setOutlet(data.outlet || null);
-          
-          // Store outletId in items for cart reference
-          if (data.outlet?._id && data.items) {
-            data.items = data.items.map(item => ({
-              ...item,
-              outletId: data.outlet._id
-            }));
-            setItems(data.items);
-          }
-
-          // Fetch categories if we have outlet ID
-          if (data.outlet?._id) {
-            try {
-              const catResponse = await fetch(
-                `${API_URL}/api/category/outlet/${data.outlet._id}`,
-                {
-                  method: "GET",
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
-                }
-              );
-              
-              const catData = await catResponse.json();
-              if (catData.success) {
-                setCategories(catData.categories || []);
-              }
-            } catch (catErr) {
-              console.error("Error loading categories:", catErr);
-            }
-          }
-        } else {
-          console.error("Failed to load items:", data.message);
+    dispatch(setCurrentOutlet({ restaurantName, outletName }));
+    
+    // Fetch data if not cached
+    if (!hasData) {
+      dispatch(fetchMenuItems({ restaurantName, outletName })).then((result) => {
+        if (result.payload?.outlet?._id) {
+          dispatch(fetchCategories({
+            outletId: result.payload.outlet._id,
+            restaurantName,
+            outletName,
+          }));
         }
-      } catch (err) {
-        console.error("Error loading menu:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
+      });
+    }
+  }, [restaurantName, outletName, dispatch, hasData]);
 
-    loadData();
-  }, [restaurantName, outletName]);
+  // Update category filter when tab changes
+  useEffect(() => {
+    dispatch(setCategory(active));
+  }, [active, dispatch]);
 
-  // -------------------------------
-  // FILTERS & CATEGORIES (HOOK SAFE)
-  // -------------------------------
-  const filteredByCategory = useMemo(() => {
-    if (active === "All") return items;
-
-    return items.filter((m) => {
-      const itemCategory = (m.category || "").trim().toLowerCase();
-      const activeCategory = active.trim().toLowerCase();
-      return itemCategory === activeCategory;
-    });
-  }, [active, items]);
-
+  // Filter items by active category
   const visible = useMemo(() => {
-    return filteredByCategory.filter((m) => {
-      if (q && !m.itemName.toLowerCase().includes(q.toLowerCase())) return false;
-      if (maxPrice !== null && m.itemPrice > maxPrice) return false;
-      if (minRating > 0 && (m.rating || 0) < minRating) return false;
-      if (spicy !== null && m.spicyLevel !== spicy) return false;
-      if (diet.size > 0 && !diet.has(m.diet?.toLowerCase())) return false;
-      return m.isAvailable !== false;
-    });
-  }, [filteredByCategory, q, maxPrice, minRating, spicy, diet]);
+    return filteredItems;
+  }, [filteredItems]);
 
   // Group visible items by category
   const itemsByCategory = useMemo(() => {
     if (visible.length === 0) return {};
     
     const grouped = visible.reduce((acc, item) => {
-      // Handle empty, null, or undefined categories
       let category = item.category;
       if (!category || typeof category !== 'string' || category.trim() === '') {
         category = "Other";
@@ -154,7 +98,6 @@ export default function ViewOutlet() {
       return acc;
     }, {});
     
-    // Sort categories alphabetically when "All" is selected
     if (active === "All") {
       const sorted = {};
       Object.keys(grouped).sort().forEach(key => {
@@ -165,26 +108,23 @@ export default function ViewOutlet() {
     return grouped;
   }, [visible, active]);
 
-  const toggleDiet = (key) =>
-    setDiet((s) => {
-      const next = new Set(s);
-      next.has(key) ? next.delete(key) : next.add(key);
-      return next;
-    });
+  // Handle diet toggle
+  const handleToggleDiet = (diet) => {
+    dispatch(toggleDietAction(diet));
+  };
 
-  // -------------------------------
-  // SAFE EARLY RETURN (AFTER HOOKS)
-  // -------------------------------
-  if (loading)
+  // Loading state
+  if (loading && !hasData) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        Loading...
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading menu...</p>
+        </div>
       </div>
     );
+  }
 
-  // -------------------------------
-  // UI RENDER
-  // -------------------------------
   return (
     <div className="min-h-screen bg-gray-50">
       <DynamicHeader />
@@ -202,20 +142,21 @@ export default function ViewOutlet() {
         </div>
       </div>
 
-      {/* BANNER LIKE MENU PAGE */}
+      {/* Banner */}
       <div className="bg-white">
         <div className="max-w-7xl mx-auto px-4 py-6 flex flex-col md:flex-row">
           <div className="w-full md:w-1/3 lg:w-1/4">
             <div className="aspect-w-1 aspect-h-1 bg-gray-200 rounded-lg overflow-hidden">
               <img
                 src={outlet?.image || "https://via.placeholder.com/300"}
+                alt={outlet?.name || "Outlet"}
                 className="object-cover w-full h-full"
               />
             </div>
           </div>
 
-          <div className="md:pl-8 w-full md:w-2/3 lg:w-3/4">
-            <h1 className="text-2xl font-bold">{outlet?.name}</h1>
+          <div className="md:pl-8 w-full md:w-2/3 lg:w-3/4 mt-4 md:mt-0">
+            <h1 className="text-2xl font-bold">{outlet?.name || outletName}</h1>
 
             <div className="flex items-center mt-2">
               <div className="flex items-center text-sm text-gray-500 mr-4">
@@ -240,7 +181,7 @@ export default function ViewOutlet() {
         </div>
       </div>
 
-      {/* TABS */}
+      {/* Tabs */}
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 flex overflow-x-auto space-x-6">
           {tabs.map((t) => (
@@ -259,14 +200,14 @@ export default function ViewOutlet() {
         </div>
       </div>
 
-      {/* FILTERS */}
+      {/* Filters */}
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 py-4 grid gap-3 md:grid-cols-4">
           <div className="relative">
             <Search className="absolute w-4 h-4 left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
+              value={filters.search || ''}
+              onChange={(e) => dispatch(setSearch(e.target.value))}
               placeholder="Search dishes..."
               className="w-full pl-9 pr-3 py-2 border rounded-md"
             />
@@ -275,10 +216,10 @@ export default function ViewOutlet() {
           <input
             type="number"
             placeholder="Max Price"
-            value={maxPrice ?? ""}
+            value={filters.maxPrice ?? ""}
             className="border rounded-md px-2 py-2"
             onChange={(e) =>
-              setMaxPrice(e.target.value ? Number(e.target.value) : null)
+              dispatch(setMaxPrice(e.target.value ? Number(e.target.value) : null))
             }
           />
 
@@ -288,16 +229,16 @@ export default function ViewOutlet() {
             max="5"
             step="0.1"
             placeholder="Min Rating"
-            value={minRating}
+            value={filters.minRating || 0}
             className="border rounded-md px-2 py-2"
-            onChange={(e) => setMinRating(Number(e.target.value))}
+            onChange={(e) => dispatch(setMinRating(Number(e.target.value)))}
           />
 
           <select
-            value={spicy ?? ""}
+            value={filters.spicy ?? ""}
             className="border rounded-md px-2 py-2"
             onChange={(e) =>
-              setSpicy(e.target.value === "" ? null : Number(e.target.value))
+              dispatch(setSpicy(e.target.value === "" ? null : Number(e.target.value)))
             }
           >
             <option value="">Spicy (Any)</option>
@@ -312,9 +253,9 @@ export default function ViewOutlet() {
           {["vegetarian", "vegan", "gluten-free"].map((d) => (
             <button
               key={d}
-              onClick={() => toggleDiet(d)}
+              onClick={() => handleToggleDiet(d)}
               className={`text-sm px-3 py-1.5 rounded-full border ${
-                diet.has(d)
+                filters.diet?.includes(d)
                   ? "bg-gray-900 text-white border-gray-900"
                   : "border-gray-300 text-gray-700"
               }`}
@@ -325,7 +266,7 @@ export default function ViewOutlet() {
         </div>
       </div>
 
-      {/* GRID - Grouped by Category */}
+      {/* Grid - Grouped by Category */}
       <div className="max-w-7xl mx-auto px-4 py-8">
         {items.length === 0 && !loading ? (
           <div className="text-center text-gray-500 py-20">
@@ -335,10 +276,6 @@ export default function ViewOutlet() {
           <div className="text-center text-gray-500 py-20">
             <p className="text-lg">No items match your filters.</p>
             <p className="text-sm mt-2">Try adjusting your search or filter criteria.</p>
-          </div>
-        ) : Object.keys(itemsByCategory).length === 0 ? (
-          <div className="text-center text-gray-500 py-20">
-            <p className="text-lg">No items to display.</p>
           </div>
         ) : (
           Object.entries(itemsByCategory).map(([category, categoryItems]) => (
@@ -369,7 +306,11 @@ export default function ViewOutlet() {
                       <div className="flex justify-between items-center mt-3">
                         <span className="text-lg font-bold">₹{m.itemPrice}</span>
                         <button
-                          onClick={() => dispatch(addToCart({ item: m, quantity: 1, outletId: outlet?._id }))}
+                          onClick={() => dispatch(addToCart({ 
+                            item: m, 
+                            quantity: 1, 
+                            outletId: outlet?._id 
+                          }))}
                           className="flex items-center gap-1 px-3 py-1.5 bg-black text-white rounded-md hover:bg-gray-800 transition-colors text-sm"
                         >
                           <Plus size={16} />
@@ -391,4 +332,4 @@ export default function ViewOutlet() {
       </div>
     </div>
   );
-};
+}

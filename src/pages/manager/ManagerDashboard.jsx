@@ -19,7 +19,7 @@ import { useAppSelector } from "../../store/hooks.js";
 import DynamicHeader from "../../components/headers/DynamicHeader.jsx";
 
 export default function ManagerDashboardNew() {
-  const { user } = useAppSelector((state) => state.auth);
+  const { user, token } = useAppSelector((state) => state.auth);
   const [stats, setStats] = useState({
     totalRevenue: 0,
     totalOrders: 0,
@@ -33,69 +33,35 @@ export default function ManagerDashboardNew() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchDashboardData();
-  }, []);
+    if (token) {
+      fetchDashboardData();
+    }
+  }, [token]);
 
   const fetchDashboardData = async () => {
     try {
-      // Mock data - in real app, fetch from API based on managed outlets
+      // Fetch real data from API
+      const API_URL = import.meta.env.VITE_API_URL;
+      
+      // Note: Manager outlets should be fetched from manager's profile or a dedicated endpoint
+      // For now, showing empty state - implement based on your manager outlet assignment logic
       setStats({
-        totalRevenue: 45000,
-        totalOrders: 380,
-        totalOutlets: 2,
-        activeOrders: 12,
-        monthlyGrowth: 8.5,
-        orderGrowth: 12.3
+        totalRevenue: 0,
+        totalOrders: 0,
+        totalOutlets: 0,
+        activeOrders: 0,
+        monthlyGrowth: 0,
+        orderGrowth: 0
       });
 
-      setRecentOrders([
-        {
-          id: "ORD001",
-          customerName: "John Doe",
-          outlet: "Downtown Branch",
-          amount: 450,
-          status: "preparing",
-          time: "5 minutes ago",
-          items: 3
-        },
-        {
-          id: "ORD002",
-          customerName: "Jane Smith",
-          outlet: "Mall Road",
-          amount: 320,
-          status: "ready",
-          time: "12 minutes ago",
-          items: 2
-        },
-        {
-          id: "ORD003",
-          customerName: "Mike Johnson",
-          outlet: "Downtown Branch",
-          amount: 180,
-          status: "delivered",
-          time: "25 minutes ago",
-          items: 1
-        }
-      ]);
-
-      setOutletPerformance([
-        {
-          name: "Downtown Branch",
-          revenue: 28000,
-          orders: 220,
-          growth: 15.2,
-          activeOrders: 8,
-          avgRating: 4.6
-        },
-        {
-          name: "Mall Road",
-          revenue: 17000,
-          orders: 160,
-          growth: 5.7,
-          activeOrders: 4,
-          avgRating: 4.4
-        }
-      ]);
+      setRecentOrders([]);
+      setOutletPerformance([]);
+      
+      // TODO: Implement manager outlet fetching and order aggregation
+      // Example:
+      // 1. Fetch manager's assigned outlets
+      // 2. For each outlet, fetch orders
+      // 3. Aggregate statistics
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
     } finally {

@@ -1,107 +1,121 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useAppSelector } from '../../store/hooks.js'
-import { Plus, MapPin,Settings, LogOut } from 'react-feather'
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAppSelector, useAppDispatch } from '../../store/hooks.js';
+import { Plus, MapPin, Settings } from 'react-feather';
 import { Building2 } from 'lucide-react';
-import DynamicHeader from '../../components/headers/DynamicHeader.jsx'
-
-const API_URL = import.meta.env.VITE_API_URL;
+import DynamicHeader from '../../components/headers/DynamicHeader.jsx';
+import {
+  fetchOwnerRestaurants,
+  createRestaurant,
+  selectRestaurants,
+  selectRestaurantLoading,
+  selectRestaurantError,
+  selectCreateLoading,
+  selectCreateError,
+  clearRestaurantError,
+  selectIsDataStale,
+} from '../../store/slices/restaurantSlice.js';
 
 export default function OwnerDashboard() {
-  const navigate = useNavigate()
-  const [restaurants, setRestaurants] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const [newRestaurantName, setNewRestaurantName] = useState('')
-  const [outletCount, setOutletCount] = useState(3)
+  const navigate = useNavigate();
+  const dispatch = useAppDispatch();
 
-  const { user, token, loading: authLoading } = useAppSelector((state) => state.auth)
-const [dataLoading, setDataLoading] = useState(true)
+  // Redux state
+  const restaurants = useAppSelector(selectRestaurants);
+  const loading = useAppSelector(selectRestaurantLoading);
+  const error = useAppSelector(selectRestaurantError);
+  const createLoading = useAppSelector(selectCreateLoading);
+  const createError = useAppSelector(selectCreateError);
+  const isDataStale = useAppSelector(selectIsDataStale);
+  
+  const { user, token, loading: authLoading } = useAppSelector((state) => state.auth);
 
-useEffect(() => {
-  if (authLoading) return
+  // Local state for modal
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newRestaurantName, setNewRestaurantName] = useState('');
+  const [outletCount, setOutletCount] = useState(3);
 
-  if (!user || user.type !== 'owner') {
-    console.log("user is not an owner")
-    navigate('/login')
-    return
-  }
+  // Auth check and data fetching
+  useEffect(() => {
+    if (authLoading) return;
 
-  fetchRestaurants()
-}, [user, token, authLoading])
-
-
-  const fetchRestaurants = async () => {
-    try {
-      const response = await fetch(`${API_URL}/api/restaurant/owner/all`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        }
-      });
-      console.log("data received form backend");
-      const data = await response.json();
-      if (data.success) {
-        setRestaurants(data.restaurants || []);
-      }
-    } catch (error) {
-      console.error('Error fetching restaurants:', error);
-    } finally {
-      setLoading(false);
+    if (!user || user.type !== 'owner') {
+      console.log('User is not an owner');
+      navigate('/login');
+      return;
     }
-  }
 
+    // Fetch restaurants if data is stale or doesn't exist
+    if (isDataStale || restaurants.length === 0) {
+      dispatch(fetchOwnerRestaurants(token));
+    }
+  }, [user, token, authLoading, dispatch, navigate, isDataStale, restaurants.length]);
+
+  // Handle create restaurant
   const handleCreateRestaurant = async (e) => {
     e.preventDefault();
-    try {
-      const response = await fetch(`${API_URL}/api/restaurant/create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          name: newRestaurantName,
-          outlet_count: outletCount,
-        }),
+    
+    const result = await dispatch(
+      createRestaurant({
+        token,
+        name: newRestaurantName,
+        outlet_count: outletCount,
       })
-      const data = await response.json()
-      if (data.success) {
-        setShowCreateModal(false)
-        setNewRestaurantName('')
-        setOutletCount(3)
-        fetchRestaurants()
-      } else {
-        alert(data.message || 'Failed to create restaurant')
-      }
-    } catch (error) {
-      console.error('Error creating restaurant:', error)
-      alert('Failed to create restaurant')
-    }
-  }
+    );
 
-  
-  
+    if (createRestaurant.fulfilled.match(result)) {
+      // Success
+      setShowCreateModal(false);
+      setNewRestaurantName('');
+      setOutletCount(3);
+    } else {
+      // Error is already stored in Redux state
+      console.error('Failed to create restaurant:', result.payload);
+    }
+  };
+
+  // Clear errors when modal closes
+  useEffect(() => {
+    if (!showCreateModal) {
+      dispatch(clearRestaurantError());
+    }
+  }, [showCreateModal, dispatch]);
+
+  // Loading state
   if (loading || authLoading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading restaurants...</p>
+        </div>
+      </div>
+    );
   }
-  
 
   return (
     <div className="min-h-screen bg-gray-50">
       <DynamicHeader />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Create Restaurant Button */}
+        {/* Header */}
         <div className="mb-6 flex justify-between items-center">
           <h2 className="text-2xl font-bold text-gray-900">My Restaurants</h2>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800"
+            className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 transition"
           >
             <Plus size={20} />
             Create Restaurant
           </button>
         </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+            {error}
+          </div>
+        )}
 
         {/* Restaurants Grid */}
         {restaurants.length === 0 ? (
@@ -120,11 +134,12 @@ useEffect(() => {
                   <h3 className="text-xl font-semibold text-gray-900">{restaurant.name}</h3>
                   <button
                     onClick={() => navigate(`/owner/restaurant/${restaurant._id}`)}
-                    className="text-gray-600 hover:text-gray-900"
+                    className="text-gray-600 hover:text-gray-900 transition"
                   >
                     <Settings size={18} />
                   </button>
                 </div>
+                
                 <div className="space-y-2 text-sm text-gray-600">
                   <div className="flex items-center gap-2">
                     <MapPin size={16} />
@@ -134,16 +149,17 @@ useEffect(() => {
                     <span>Limit: {restaurant.outlet_count} outlets</span>
                   </div>
                 </div>
+                
                 <div className="mt-4 flex gap-2">
                   <button
                     onClick={() => navigate(`/owner/restaurant/${restaurant._id}`)}
-                    className="flex-1 px-4 py-2 bg-gray-900 text-white rounded hover:bg-gray-800"
+                    className="flex-1 px-4 py-2 bg-gray-900 text-white rounded hover:bg-gray-800 transition"
                   >
                     Manage
                   </button>
                   <button
                     onClick={() => navigate(`/view/${restaurant.name}`)}
-                    className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
+                    className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50 transition"
                   >
                     View
                   </button>
@@ -159,6 +175,14 @@ useEffect(() => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
             <h3 className="text-xl font-bold mb-4">Create New Restaurant</h3>
+            
+            {/* Create Error Message */}
+            {createError && (
+              <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">
+                {createError}
+              </div>
+            )}
+            
             <form onSubmit={handleCreateRestaurant}>
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -168,10 +192,13 @@ useEffect(() => {
                   type="text"
                   value={newRestaurantName}
                   onChange={(e) => setNewRestaurantName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black focus:border-black"
+                  placeholder="Enter restaurant name"
                   required
+                  disabled={createLoading}
                 />
               </div>
+              
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Outlet Limit
@@ -181,23 +208,27 @@ useEffect(() => {
                   min="1"
                   value={outletCount}
                   onChange={(e) => setOutletCount(parseInt(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black focus:border-black"
                   required
+                  disabled={createLoading}
                 />
               </div>
+              
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded hover:bg-gray-50 transition"
+                  disabled={createLoading}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-black text-white rounded hover:bg-gray-800"
+                  className="flex-1 px-4 py-2 bg-black text-white rounded hover:bg-gray-800 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  disabled={createLoading}
                 >
-                  Create
+                  {createLoading ? 'Creating...' : 'Create'}
                 </button>
               </div>
             </form>
@@ -205,6 +236,5 @@ useEffect(() => {
         </div>
       )}
     </div>
-  )
+  );
 }
-

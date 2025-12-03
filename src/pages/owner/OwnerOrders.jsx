@@ -10,89 +10,129 @@ import {
   Download,
   RefreshCw
 } from "react-feather";
+import { useAppSelector, useAppDispatch } from "../../store/hooks.js";
+import { fetchOutletOrders, updateOrderStatus } from "../../store/slices/ordersSlice.js";
 import DynamicHeader from "../../components/headers/DynamicHeader.jsx";
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 export default function OwnerOrders() {
+  const { token, user } = useAppSelector((state) => state.auth);
+  const dispatch = useAppDispatch();
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
     status: "all",
     restaurant: "all",
+    outlet: "all",
     dateRange: "today",
     searchQuery: ""
   });
+  const [restaurants, setRestaurants] = useState([]);
+  const [outlets, setOutlets] = useState([]);
 
   useEffect(() => {
-    fetchOrders();
-  }, []);
+    if (token && user?.type === 'owner') {
+      fetchRestaurantsAndOrders();
+    }
+  }, [token, user]);
 
   useEffect(() => {
     applyFilters();
   }, [orders, filters]);
 
-  const fetchOrders = async () => {
+  const fetchRestaurantsAndOrders = async () => {
     try {
-      // Mock orders data - in real app, fetch from API
-      const mockOrders = [
-        {
-          id: "ORD001",
-          customerName: "John Doe",
-          customerPhone: "+91 9876543210",
-          restaurant: "Pizza Palace",
-          outlet: "Downtown Branch",
-          items: [
-            { name: "Margherita Pizza", quantity: 1, price: 299 },
-            { name: "Garlic Bread", quantity: 2, price: 99 }
-          ],
-          total: 497,
-          status: "preparing",
-          orderDate: new Date(Date.now() - 30 * 60 * 1000), // 30 minutes ago
-          estimatedDelivery: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes from now
-          paymentMethod: "card",
-          deliveryAddress: "123 Main St, Downtown"
+      setLoading(true);
+      
+      // Fetch owner's restaurants
+      const restaurantsResponse = await fetch(`${API_URL}/api/restaurant/owner/all`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
         },
-        {
-          id: "ORD002",
-          customerName: "Jane Smith",
-          customerPhone: "+91 9876543211",
-          restaurant: "Burger Hub",
-          outlet: "Mall Road",
-          items: [
-            { name: "Classic Burger", quantity: 2, price: 199 },
-            { name: "French Fries", quantity: 1, price: 89 }
-          ],
-          total: 487,
-          status: "ready",
-          orderDate: new Date(Date.now() - 45 * 60 * 1000), // 45 minutes ago
-          estimatedDelivery: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes from now
-          paymentMethod: "upi",
-          deliveryAddress: "456 Mall Road, City Center"
-        },
-        {
-          id: "ORD003",
-          customerName: "Mike Johnson",
-          customerPhone: "+91 9876543212",
-          restaurant: "Pizza Palace",
-          outlet: "City Center",
-          items: [
-            { name: "Cappuccino", quantity: 2, price: 120 },
-            { name: "Chocolate Cake", quantity: 1, price: 180 }
-          ],
-          total: 420,
-          status: "delivered",
-          orderDate: new Date(Date.now() - 120 * 60 * 1000), // 2 hours ago
-          deliveredAt: new Date(Date.now() - 60 * 60 * 1000), // 1 hour ago
-          paymentMethod: "cod",
-          deliveryAddress: "789 Park Avenue, Uptown"
+      });
+      const restaurantsData = await restaurantsResponse.json();
+      
+      if (restaurantsData.success) {
+        setRestaurants(restaurantsData.restaurants || []);
+        
+        // Get all outlets from all restaurants
+        const allOutlets = [];
+        for (const restaurant of restaurantsData.restaurants || []) {
+          const outletsResponse = await fetch(`${API_URL}/api/outlet/restaurant/${restaurant._id}`);
+          const outletsData = await outletsResponse.json();
+          if (outletsData.success) {
+            allOutlets.push(...(outletsData.outlets || []));
+          }
         }
-      ];
-      setOrders(mockOrders);
+        setOutlets(allOutlets);
+        
+        // Create a map of outletId to restaurant name
+        const outletToRestaurantMap = {};
+        for (const restaurant of restaurantsData.restaurants || []) {
+          const outletsResponse = await fetch(`${API_URL}/api/outlet/restaurant/${restaurant._id}`);
+          const outletsData = await outletsResponse.json();
+          if (outletsData.success) {
+            (outletsData.outlets || []).forEach(outlet => {
+              outletToRestaurantMap[outlet._id] = restaurant.name;
+            });
+          }
+        }
+        
+        // Fetch orders from all outlets
+        const allOrders = [];
+        for (const outlet of allOutlets) {
+          try {
+            const ordersResponse = await fetch(`${API_URL}/api/order/outlet/${outlet._id}`, {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+              },
+            });
+            const ordersData = await ordersResponse.json();
+            if (ordersData.success) {
+              // Add restaurant and outlet info to each order
+              const ordersWithInfo = (ordersData.orders || []).map(order => ({
+                ...order,
+                restaurantName: outletToRestaurantMap[outlet._id] || 'Unknown',
+                outletName: outlet.name,
+              }));
+              allOrders.push(...ordersWithInfo);
+            }
+          } catch (error) {
+            console.error(`Error fetching orders for outlet ${outlet._id}:`, error);
+          }
+        }
+        
+        // Transform orders to match the expected format
+        const transformedOrders = allOrders.map(order => ({
+          id: order.orderNumber || order._id,
+          _id: order._id,
+          customerName: order.userId?.name || order.customerInfo?.name || 'Guest',
+          customerEmail: order.userId?.email || order.customerInfo?.email || '',
+          customerPhone: order.customerInfo?.phone || '',
+          restaurant: order.restaurantName || 'Unknown',
+          outlet: order.outletName || 'Unknown',
+          items: order.items || [],
+          total: order.totalPrice,
+          status: order.status,
+          paymentStatus: order.paymentStatus,
+          orderDate: new Date(order.createdAt),
+          paymentMethod: order.paymentMethod,
+          deliveryAddress: order.deliveryAddress,
+        }));
+        
+        setOrders(transformedOrders);
+      }
     } catch (error) {
       console.error("Error fetching orders:", error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchOrders = async () => {
+    await fetchRestaurantsAndOrders();
   };
 
   const applyFilters = () => {
@@ -108,13 +148,18 @@ export default function OwnerOrders() {
       filtered = filtered.filter(order => order.restaurant === filters.restaurant);
     }
 
+    // Outlet filter
+    if (filters.outlet !== "all") {
+      filtered = filtered.filter(order => order.outlet === filters.outlet);
+    }
+
     // Search filter
     if (filters.searchQuery) {
       const query = filters.searchQuery.toLowerCase();
       filtered = filtered.filter(order => 
         order.id.toLowerCase().includes(query) ||
         order.customerName.toLowerCase().includes(query) ||
-        order.customerPhone.includes(query)
+        (order.customerPhone && order.customerPhone.includes(query))
       );
     }
 
@@ -127,6 +172,9 @@ export default function OwnerOrders() {
     } else if (filters.dateRange === "week") {
       const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
       filtered = filtered.filter(order => order.orderDate >= weekAgo);
+    } else if (filters.dateRange === "month") {
+      const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+      filtered = filtered.filter(order => order.orderDate >= monthAgo);
     }
 
     setFilteredOrders(filtered);
@@ -134,12 +182,22 @@ export default function OwnerOrders() {
 
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
-      // In real app, make API call to update status
-      setOrders(prev => prev.map(order => 
-        order.id === orderId ? { ...order, status: newStatus } : order
-      ));
+      if (!token) return;
+      
+      const order = orders.find(o => o._id === orderId || o.id === orderId);
+      if (!order) return;
+      
+      await dispatch(updateOrderStatus({ 
+        orderId: order._id, 
+        status: newStatus, 
+        token 
+      })).unwrap();
+      
+      // Refresh orders after update
+      await fetchRestaurantsAndOrders();
     } catch (error) {
       console.error("Error updating order status:", error);
+      alert("Failed to update order status. Please try again.");
     }
   };
 
@@ -224,7 +282,7 @@ export default function OwnerOrders() {
 
         {/* Filters */}
         <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
               <input
@@ -242,21 +300,47 @@ export default function OwnerOrders() {
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black"
             >
               <option value="all">All Status</option>
+              <option value="pending">Pending</option>
+              <option value="confirmed">Confirmed</option>
               <option value="preparing">Preparing</option>
               <option value="ready">Ready</option>
+              <option value="out_for_delivery">Out for Delivery</option>
               <option value="delivered">Delivered</option>
               <option value="cancelled">Cancelled</option>
             </select>
             
             <select
               value={filters.restaurant}
-              onChange={(e) => setFilters(prev => ({ ...prev, restaurant: e.target.value }))}
+              onChange={(e) => {
+                setFilters(prev => ({ ...prev, restaurant: e.target.value, outlet: "all" }));
+              }}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black"
             >
               <option value="all">All Restaurants</option>
-              <option value="Pizza Palace">Pizza Palace</option>
-              <option value="Burger Hub">Burger Hub</option>
-              <option value="Cafe Delight">Cafe Delight</option>
+              {restaurants.map(restaurant => (
+                <option key={restaurant._id} value={restaurant.name}>
+                  {restaurant.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={filters.outlet}
+              onChange={(e) => setFilters(prev => ({ ...prev, outlet: e.target.value }))}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black"
+              disabled={filters.restaurant === "all"}
+            >
+              <option value="all">All Outlets</option>
+              {filters.restaurant !== "all" && outlets
+                .filter(outlet => {
+                  const restaurant = restaurants.find(r => r.name === filters.restaurant);
+                  return restaurant && restaurant.outlets?.some(id => id.toString() === outlet._id);
+                })
+                .map(outlet => (
+                  <option key={outlet._id} value={outlet.name}>
+                    {outlet.name}
+                  </option>
+                ))}
             </select>
             
             <select
@@ -310,8 +394,15 @@ export default function OwnerOrders() {
                   <div>
                     <h4 className="font-medium text-gray-900 mb-2">Customer</h4>
                     <p className="text-sm text-gray-600">{order.customerName}</p>
-                    <p className="text-sm text-gray-600">{order.customerPhone}</p>
-                    <p className="text-sm text-gray-600 mt-1">{order.deliveryAddress}</p>
+                    {order.customerPhone && (
+                      <p className="text-sm text-gray-600">{order.customerPhone}</p>
+                    )}
+                    {order.customerEmail && (
+                      <p className="text-sm text-gray-600">{order.customerEmail}</p>
+                    )}
+                    {order.deliveryAddress && (
+                      <p className="text-sm text-gray-600 mt-1">{order.deliveryAddress}</p>
+                    )}
                   </div>
 
                   {/* Order Items */}
@@ -320,7 +411,7 @@ export default function OwnerOrders() {
                     <div className="space-y-1">
                       {order.items.map((item, index) => (
                         <p key={index} className="text-sm text-gray-600">
-                          {item.quantity}x {item.name} - ₹{item.price * item.quantity}
+                          {item.quantity}x {item.itemName || item.name} - ₹{(item.itemPrice || item.price) * item.quantity}
                         </p>
                       ))}
                     </div>
@@ -344,6 +435,11 @@ export default function OwnerOrders() {
                     )}
                     <p className="text-sm text-gray-600 capitalize">
                       Payment: {order.paymentMethod}
+                    </p>
+                    <p className={`text-sm font-medium capitalize ${
+                      order.paymentStatus === 'paid' ? 'text-green-600' : 'text-yellow-600'
+                    }`}>
+                      Payment Status: {order.paymentStatus || 'pending'}
                     </p>
                   </div>
                 </div>

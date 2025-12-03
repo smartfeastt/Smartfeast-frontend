@@ -2,7 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-// Async thunk to fetch menu items
+// Async thunk to fetch menu items for a specific restaurant/outlet
 export const fetchMenuItems = createAsyncThunk(
   'menu/fetchItems',
   async ({ restaurantName, outletName }, { rejectWithValue }) => {
@@ -16,7 +16,12 @@ export const fetchMenuItems = createAsyncThunk(
       );
       const data = await response.json();
       if (data.success) {
-        return { items: data.items || [], outlet: data.outlet };
+        return { 
+          items: data.items || [], 
+          outlet: data.outlet,
+          restaurantName,
+          outletName 
+        };
       }
       return rejectWithValue(data.message || 'Failed to fetch menu items');
     } catch (error) {
@@ -25,10 +30,10 @@ export const fetchMenuItems = createAsyncThunk(
   }
 );
 
-// Async thunk to fetch categories
+// Async thunk to fetch categories for a specific outlet
 export const fetchCategories = createAsyncThunk(
   'menu/fetchCategories',
-  async (outletId, { rejectWithValue }) => {
+  async ({ outletId, restaurantName, outletName }, { rejectWithValue }) => {
     try {
       const response = await fetch(
         `${API_URL}/api/category/outlet/${outletId}`,
@@ -39,7 +44,11 @@ export const fetchCategories = createAsyncThunk(
       );
       const data = await response.json();
       if (data.success) {
-        return data.categories || [];
+        return { 
+          categories: data.categories || [],
+          restaurantName,
+          outletName 
+        };
       }
       return rejectWithValue(data.message || 'Failed to fetch categories');
     } catch (error) {
@@ -51,55 +60,91 @@ export const fetchCategories = createAsyncThunk(
 const menuSlice = createSlice({
   name: 'menu',
   initialState: {
-    items: [],
-    categories: [],
-    outlet: null,
+    // Store menu data by "restaurantName/outletName" key
+    outlets: {},
+    // Current active outlet
+    currentOutlet: null,
     loading: false,
     error: null,
-    filters: {
-      search: '',
-      maxPrice: null,
-      minRating: 0,
-      spicy: null,
-      diet: new Set(),
-      category: 'All',
-    },
+    // Filters are per-outlet
+    filters: {},
   },
   reducers: {
-    setSearch: (state, action) => {
-      state.filters.search = action.payload;
-    },
-    setMaxPrice: (state, action) => {
-      state.filters.maxPrice = action.payload;
-    },
-    setMinRating: (state, action) => {
-      state.filters.minRating = action.payload;
-    },
-    setSpicy: (state, action) => {
-      state.filters.spicy = action.payload;
-    },
-    toggleDiet: (state, action) => {
-      const diet = action.payload;
-      if (state.filters.diet.has(diet)) {
-        state.filters.diet.delete(diet);
-      } else {
-        state.filters.diet.add(diet);
+    setCurrentOutlet: (state, action) => {
+      const { restaurantName, outletName } = action.payload;
+      state.currentOutlet = `${restaurantName}/${outletName}`;
+      
+      // Initialize filters for this outlet if they don't exist
+      if (!state.filters[state.currentOutlet]) {
+        state.filters[state.currentOutlet] = {
+          search: '',
+          maxPrice: null,
+          minRating: 0,
+          spicy: null,
+          diet: [],
+          category: 'All',
+        };
       }
     },
-    setCategory: (state, action) => {
-      state.filters.category = action.payload;
+    
+    setSearch: (state, action) => {
+      if (state.currentOutlet) {
+        state.filters[state.currentOutlet].search = action.payload;
+      }
     },
+    
+    setMaxPrice: (state, action) => {
+      if (state.currentOutlet) {
+        state.filters[state.currentOutlet].maxPrice = action.payload;
+      }
+    },
+    
+    setMinRating: (state, action) => {
+      if (state.currentOutlet) {
+        state.filters[state.currentOutlet].minRating = action.payload;
+      }
+    },
+    
+    setSpicy: (state, action) => {
+      if (state.currentOutlet) {
+        state.filters[state.currentOutlet].spicy = action.payload;
+      }
+    },
+    
+    toggleDiet: (state, action) => {
+      if (state.currentOutlet) {
+        const diet = action.payload;
+        const dietArray = state.filters[state.currentOutlet].diet;
+        const index = dietArray.indexOf(diet);
+        
+        if (index > -1) {
+          dietArray.splice(index, 1);
+        } else {
+          dietArray.push(diet);
+        }
+      }
+    },
+    
+    setCategory: (state, action) => {
+      if (state.currentOutlet) {
+        state.filters[state.currentOutlet].category = action.payload;
+      }
+    },
+    
     clearFilters: (state) => {
-      state.filters = {
-        search: '',
-        maxPrice: null,
-        minRating: 0,
-        spicy: null,
-        diet: new Set(),
-        category: 'All',
-      };
+      if (state.currentOutlet) {
+        state.filters[state.currentOutlet] = {
+          search: '',
+          maxPrice: null,
+          minRating: 0,
+          spicy: null,
+          diet: [],
+          category: 'All',
+        };
+      }
     },
   },
+  
   extraReducers: (builder) => {
     builder
       .addCase(fetchMenuItems.pending, (state) => {
@@ -108,20 +153,34 @@ const menuSlice = createSlice({
       })
       .addCase(fetchMenuItems.fulfilled, (state, action) => {
         state.loading = false;
-        state.items = action.payload.items;
-        state.outlet = action.payload.outlet;
+        const { items, outlet, restaurantName, outletName } = action.payload;
+        const key = `${restaurantName}/${outletName}`;
+        
+        // Store outlet data
+        state.outlets[key] = {
+          items: items.map(item => ({ ...item, outletId: outlet?._id })),
+          outlet,
+          categories: state.outlets[key]?.categories || [],
+          lastFetched: Date.now(),
+        };
       })
       .addCase(fetchMenuItems.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
       .addCase(fetchCategories.fulfilled, (state, action) => {
-        state.categories = action.payload;
+        const { categories, restaurantName, outletName } = action.payload;
+        const key = `${restaurantName}/${outletName}`;
+        
+        if (state.outlets[key]) {
+          state.outlets[key].categories = categories;
+        }
       });
   },
 });
 
 export const {
+  setCurrentOutlet,
   setSearch,
   setMaxPrice,
   setMinRating,
@@ -132,18 +191,45 @@ export const {
 } = menuSlice.actions;
 
 // Selectors
-export const selectMenuItems = (state) => state.menu.items;
-export const selectCategories = (state) => state.menu.categories;
-export const selectOutlet = (state) => state.menu.outlet;
+export const selectCurrentOutletKey = (state) => state.menu.currentOutlet;
+
+export const selectCurrentOutletData = (state) => {
+  const key = state.menu.currentOutlet;
+  return key ? state.menu.outlets[key] : null;
+};
+
+export const selectMenuItems = (state) => {
+  const data = selectCurrentOutletData(state);
+  return data?.items || [];
+};
+
+export const selectCategories = (state) => {
+  const data = selectCurrentOutletData(state);
+  return data?.categories || [];
+};
+
+export const selectOutlet = (state) => {
+  const data = selectCurrentOutletData(state);
+  return data?.outlet || null;
+};
+
 export const selectMenuLoading = (state) => state.menu.loading;
-export const selectMenuFilters = (state) => state.menu.filters;
+
+export const selectMenuFilters = (state) => {
+  const key = state.menu.currentOutlet;
+  return key ? state.menu.filters[key] || {} : {};
+};
 
 export const selectFilteredItems = (state) => {
-  const { items, filters } = state.menu;
+  const items = selectMenuItems(state);
+  const filters = selectMenuFilters(state);
+  
+  if (!filters) return items;
+  
   let filtered = items;
 
   // Filter by category
-  if (filters.category !== 'All') {
+  if (filters.category && filters.category !== 'All') {
     filtered = filtered.filter(
       (item) => (item.category || '').trim().toLowerCase() === filters.category.toLowerCase()
     );
@@ -157,7 +243,7 @@ export const selectFilteredItems = (state) => {
   }
 
   // Filter by max price
-  if (filters.maxPrice !== null) {
+  if (filters.maxPrice !== null && filters.maxPrice !== undefined) {
     filtered = filtered.filter((item) => item.itemPrice <= filters.maxPrice);
   }
 
@@ -167,14 +253,14 @@ export const selectFilteredItems = (state) => {
   }
 
   // Filter by spicy
-  if (filters.spicy !== null) {
+  if (filters.spicy !== null && filters.spicy !== undefined) {
     filtered = filtered.filter((item) => item.spicyLevel === filters.spicy);
   }
 
   // Filter by diet
-  if (filters.diet.size > 0) {
+  if (filters.diet && filters.diet.length > 0) {
     filtered = filtered.filter((item) =>
-      filters.diet.has(item.diet?.toLowerCase())
+      filters.diet.includes(item.diet?.toLowerCase())
     );
   }
 
@@ -184,5 +270,10 @@ export const selectFilteredItems = (state) => {
   return filtered;
 };
 
-export default menuSlice.reducer;
+// Check if outlet data exists (for cache checking)
+export const selectHasOutletData = (restaurantName, outletName) => (state) => {
+  const key = `${restaurantName}/${outletName}`;
+  return !!state.menu.outlets[key];
+};
 
+export default menuSlice.reducer;

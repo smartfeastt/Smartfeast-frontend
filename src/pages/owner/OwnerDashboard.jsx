@@ -18,7 +18,7 @@ import { useAppSelector } from "../../store/hooks.js";
 import DynamicHeader from "../../components/headers/DynamicHeader.jsx";
 
 export default function OwnerDashboardNew() {
-  const { user } = useAppSelector((state) => state.auth);
+  const { user, token } = useAppSelector((state) => state.auth);
   const [stats, setStats] = useState({
     totalRevenue: 0,
     totalOrders: 0,
@@ -32,74 +32,88 @@ export default function OwnerDashboardNew() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchDashboardData();
-  }, []);
+    if (token) {
+      fetchDashboardData();
+    }
+  }, [token]);
 
   const fetchDashboardData = async () => {
     try {
-      // Mock data - in real app, fetch from API
+      // Fetch real data from API
+      const API_URL = import.meta.env.VITE_API_URL;
+      
+      // Fetch restaurants to get counts
+      const restaurantsResponse = await fetch(`${API_URL}/api/restaurant/owner/all`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      const restaurantsData = await restaurantsResponse.json();
+      
+      let totalRestaurants = 0;
+      let totalOutlets = 0;
+      let totalRevenue = 0;
+      let totalOrders = 0;
+      const recentOrdersList = [];
+      
+      if (restaurantsData.success) {
+        totalRestaurants = restaurantsData.restaurants?.length || 0;
+        
+        // Get outlets and orders for each restaurant
+        for (const restaurant of restaurantsData.restaurants || []) {
+          const outletsResponse = await fetch(`${API_URL}/api/outlet/restaurant/${restaurant._id}`);
+          const outletsData = await outletsResponse.json();
+          
+          if (outletsData.success) {
+            totalOutlets += outletsData.outlets?.length || 0;
+            
+            // Fetch orders for each outlet
+            for (const outlet of outletsData.outlets || []) {
+              try {
+                const ordersResponse = await fetch(`${API_URL}/api/order/outlet/${outlet._id}`, {
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                  },
+                });
+                const ordersData = await ordersResponse.json();
+                
+                if (ordersData.success) {
+                  const paidOrders = (ordersData.orders || []).filter(o => o.paymentStatus === 'paid');
+                  totalOrders += paidOrders.length;
+                  totalRevenue += paidOrders.reduce((sum, o) => sum + (o.totalPrice || 0), 0);
+                  
+                  // Add recent orders
+                  paidOrders.slice(0, 3).forEach(order => {
+                    recentOrdersList.push({
+                      id: order.orderNumber || order._id,
+                      customerName: order.userId?.name || order.customerInfo?.name || 'Guest',
+                      restaurant: restaurant.name,
+                      outlet: outlet.name,
+                      amount: order.totalPrice,
+                      status: order.status,
+                      time: new Date(order.createdAt).toLocaleString(),
+                    });
+                  });
+                }
+              } catch (error) {
+                console.error(`Error fetching orders for outlet ${outlet._id}:`, error);
+              }
+            }
+          }
+        }
+      }
+      
       setStats({
-        totalRevenue: 125000,
-        totalOrders: 1250,
-        totalRestaurants: 3,
-        totalOutlets: 8,
-        monthlyGrowth: 12.5,
-        orderGrowth: 8.3
+        totalRevenue,
+        totalOrders,
+        totalRestaurants,
+        totalOutlets,
+        monthlyGrowth: 0, // Calculate from previous month data
+        orderGrowth: 0, // Calculate from previous period data
       });
 
-      setRecentOrders([
-        {
-          id: "ORD001",
-          customerName: "John Doe",
-          restaurant: "Pizza Palace",
-          outlet: "Downtown",
-          amount: 450,
-          status: "delivered",
-          time: "2 hours ago"
-        },
-        {
-          id: "ORD002",
-          customerName: "Jane Smith",
-          restaurant: "Burger Hub",
-          outlet: "Mall Road",
-          amount: 320,
-          status: "preparing",
-          time: "30 minutes ago"
-        },
-        {
-          id: "ORD003",
-          customerName: "Mike Johnson",
-          restaurant: "Cafe Delight",
-          outlet: "City Center",
-          amount: 180,
-          status: "delivered",
-          time: "1 hour ago"
-        }
-      ]);
-
-      setTopRestaurants([
-        {
-          name: "Pizza Palace",
-          outlets: 3,
-          revenue: 65000,
-          orders: 520,
-          growth: 15.2
-        },
-        {
-          name: "Burger Hub",
-          outlets: 3,
-          revenue: 42000,
-          orders: 380,
-          growth: 8.7
-        },
-        {
-          name: "Cafe Delight",
-          outlets: 2,
-          revenue: 18000,
-          orders: 350,
-          growth: 12.1
-        }
-      ]);
+      setRecentOrders(recentOrdersList.slice(0, 5));
+      setTopRestaurants([]); // Can be calculated from restaurant data
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
     } finally {

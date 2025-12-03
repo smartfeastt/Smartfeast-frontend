@@ -36,8 +36,9 @@ export default function Checkout() {
       return;
     }
 
-    if (!customerInfo.address) {
-      alert("Please enter delivery address");
+    // Validate required fields
+    if (!customerInfo.name || !customerInfo.email || !customerInfo.phone || !customerInfo.address) {
+      alert("Please fill in all required fields (Name, Email, Phone, and Address)");
       return;
     }
 

@@ -13,7 +13,8 @@ import {
   X,
   Home,
   Heart,
-  Clock
+  Clock,
+  MapPin
 } from "react-feather";
 import { Store } from "lucide-react";
 
@@ -100,6 +101,10 @@ export default function DynamicHeader() {
                 <Heart size={18} />
                 Favorites
               </Link>
+              <Link to="/user/addresses" className="text-gray-600 hover:text-gray-900 flex items-center gap-1">
+                <MapPin size={18} />
+                Addresses
+              </Link>
             </nav>
             
             <div className="flex items-center gap-4">
@@ -181,6 +186,7 @@ export default function DynamicHeader() {
                 <Link to="/" className="block py-2 text-gray-600 hover:text-gray-900">Home</Link>
                 <Link to="/user/orders" className="block py-2 text-gray-600 hover:text-gray-900">Orders</Link>
                 <Link to="/user/favorites" className="block py-2 text-gray-600 hover:text-gray-900">Favorites</Link>
+                <Link to="/user/addresses" className="block py-2 text-gray-600 hover:text-gray-900">Addresses</Link>
               </div>
             </nav>
           )}
@@ -207,6 +213,10 @@ export default function DynamicHeader() {
               <Link to="/owner/restaurants" className="text-gray-300 hover:text-white flex items-center gap-1">
                 <Store size={18} />
                 Restaurants
+              </Link>
+              <Link to="/owner/orders" className="text-gray-300 hover:text-white flex items-center gap-1">
+                <Package size={18} />
+                Orders
               </Link>
               <Link to="/owner/analytics" className="text-gray-300 hover:text-white flex items-center gap-1">
                 <BarChart size={18} />
@@ -284,6 +294,7 @@ export default function DynamicHeader() {
               <div className="space-y-2">
                 <Link to="/owner/dashboard" className="block py-2 text-gray-300 hover:text-white">Dashboard</Link>
                 <Link to="/owner/restaurants" className="block py-2 text-gray-300 hover:text-white">Restaurants</Link>
+                <Link to="/owner/orders" className="block py-2 text-gray-300 hover:text-white">Orders</Link>
                 <Link to="/owner/analytics" className="block py-2 text-gray-300 hover:text-white">Analytics</Link>
                 <Link to="/owner/payments" className="block py-2 text-gray-300 hover:text-white">Payments</Link>
               </div>
