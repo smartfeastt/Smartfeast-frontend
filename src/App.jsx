@@ -1,6 +1,6 @@
 ﻿import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { Provider } from "react-redux";
-import { store } from "./store/store.js";
+import { store } from "./store/store.ts";
 
 // Public pages
 import Landing from "./pages/global/Landing.jsx";
