@@ -37,6 +37,14 @@ export default function OwnerDashboard() {
   const [newRestaurantName, setNewRestaurantName] = useState('');
   const [outletCount, setOutletCount] = useState(3);
   const [deletingRestaurant, setDeletingRestaurant] = useState(null);
+  const [restaurantImage, setRestaurantImage] = useState(null);
+  const [restaurantImagePreview, setRestaurantImagePreview] = useState(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingRestaurant, setEditingRestaurant] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editOutletCount, setEditOutletCount] = useState(3);
+  const [editImagePreview, setEditImagePreview] = useState(null);
 
   // Auth check and data fetching
   useEffect(() => {
@@ -54,14 +62,95 @@ export default function OwnerDashboard() {
     }
   }, [user, token, authLoading, dispatch, navigate, isDataStale, restaurants.length]);
 
+  // Handle image selection
+  const handleImageSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file');
+        return;
+      }
+      // Validate file size (5MB max)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image size must be less than 5MB');
+        return;
+      }
+      setRestaurantImage(file);
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setRestaurantImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Upload image to Supabase
+  const uploadImage = async (file) => {
+    try {
+      setUploadingImage(true);
+      // Get presigned URL
+      const presignResponse = await fetch(`${API_URL}/api/upload/presign`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fileName: file.name,
+          contentType: file.type,
+          folder: 'restaurants',
+        }),
+      });
+
+      const presignData = await presignResponse.json();
+      if (!presignData.success) {
+        throw new Error(presignData.message || 'Failed to get upload URL');
+      }
+
+      // Upload file to Supabase
+      const uploadResponse = await fetch(presignData.signedUrl, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type,
+        },
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload image');
+      }
+
+      return presignData.fileUrl;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      throw error;
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   // Handle create restaurant
   const handleCreateRestaurant = async (e) => {
     e.preventDefault();
+    
+    let imageUrl = "";
+    if (restaurantImage) {
+      try {
+        imageUrl = await uploadImage(restaurantImage);
+      } catch (error) {
+        alert('Failed to upload image. Please try again.');
+        return;
+      }
+    }
+
     const result = await dispatch(
       createRestaurant({
         token,
         name: newRestaurantName,
         outlet_count: outletCount,
+        restaurantImage: imageUrl,
       })
     );
 
@@ -70,6 +159,8 @@ export default function OwnerDashboard() {
       setShowCreateModal(false);
       setNewRestaurantName('');
       setOutletCount(3);
+      setRestaurantImage(null);
+      setRestaurantImagePreview(null);
     } else {
       // Error is already stored in Redux state
       console.error('Failed to create restaurant:', result.payload);
@@ -169,50 +260,79 @@ export default function OwnerDashboard() {
             {restaurants.map((restaurant) => (
               <div
                 key={restaurant._id}
-                className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
+                className="bg-white rounded-lg shadow overflow-hidden hover:shadow-lg transition"
               >
-                <div className="flex justify-between items-start mb-4">
-                  <h3 className="text-xl font-semibold text-gray-900">{restaurant.name}</h3>
+                {/* Restaurant Image */}
+                <div className="h-48 bg-gray-200 overflow-hidden">
+                  <img
+                    src={restaurant?.restaurantImage || restaurant?.profilePhotoUrl || restaurant?.image || "https://via.placeholder.com/300"}
+                    alt={restaurant?.name || "Restaurant"}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.src = "https://via.placeholder.com/300";
+                    }}
+                  />
+                </div>
+                
+                <div className="p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <h3 className="text-xl font-semibold text-gray-900">{restaurant.name}</h3>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          setEditingRestaurant(restaurant);
+                          setEditName(restaurant.name);
+                          setEditOutletCount(restaurant.outlet_count || 3);
+                          setEditImagePreview(restaurant?.restaurantImage || restaurant?.profilePhotoUrl || restaurant?.image || null);
+                          setShowEditModal(true);
+                        }}
+                        className="text-gray-600 hover:text-gray-900 transition"
+                        title="Edit Restaurant"
+                      >
+                        <Settings size={18} />
+                      </button>
+                      <button
+                        onClick={() => navigate(`/owner/restaurant/${restaurant._id}`)}
+                        className="text-blue-600 hover:text-blue-800 transition"
+                        title="Manage Outlets"
+                      >
+                        <MapPin size={18} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteRestaurant(restaurant._id)}
+                        disabled={deletingRestaurant === restaurant._id}
+                        className="text-red-600 hover:text-red-800 transition disabled:opacity-50"
+                        title="Delete Restaurant"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2 text-sm text-gray-600 mb-4">
+                    <div className="flex items-center gap-2">
+                      <MapPin size={16} />
+                      <span>{restaurant.outlets?.length || 0} Outlets</span>
+                    </div>
+                    <div>
+                      <span>Limit: {restaurant.outlet_count} outlets</span>
+                    </div>
+                  </div>
+                  
                   <div className="flex gap-2">
                     <button
                       onClick={() => navigate(`/owner/restaurant/${restaurant._id}`)}
-                      className="text-gray-600 hover:text-gray-900 transition"
+                      className="flex-1 px-4 py-2 bg-gray-900 text-white rounded hover:bg-gray-800 transition"
                     >
-                      <Settings size={18} />
+                      Manage
                     </button>
                     <button
-                      onClick={() => handleDeleteRestaurant(restaurant._id)}
-                      disabled={deletingRestaurant === restaurant._id}
-                      className="text-red-600 hover:text-red-800 transition disabled:opacity-50"
+                      onClick={() => navigate(`/view/${restaurant.name}`)}
+                      className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50 transition"
                     >
-                      <Trash2 size={18} />
+                      View
                     </button>
                   </div>
-                </div>
-                
-                <div className="space-y-2 text-sm text-gray-600">
-                  <div className="flex items-center gap-2">
-                    <MapPin size={16} />
-                    <span>{restaurant.outlets?.length || 0} Outlets</span>
-                  </div>
-                  <div>
-                    <span>Limit: {restaurant.outlet_count} outlets</span>
-                  </div>
-                </div>
-                
-                <div className="mt-4 flex gap-2">
-                  <button
-                    onClick={() => navigate(`/owner/restaurant/${restaurant._id}`)}
-                    className="flex-1 px-4 py-2 bg-gray-900 text-white rounded hover:bg-gray-800 transition"
-                  >
-                    Manage
-                  </button>
-                  <button
-                    onClick={() => navigate(`/view/${restaurant.name}`)}
-                    className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50 transition"
-                  >
-                    View
-                  </button>
                 </div>
               </div>
             ))}
@@ -302,9 +422,151 @@ export default function OwnerDashboard() {
                 <button
                   type="submit"
                   className="flex-1 px-4 py-2 bg-black text-white rounded hover:bg-gray-800 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
-                  disabled={createLoading}
+                  disabled={createLoading || uploadingImage}
                 >
-                  {createLoading ? 'Creating...' : 'Create'}
+                  {uploadingImage ? 'Uploading Image...' : createLoading ? 'Creating...' : 'Create'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Restaurant Modal */}
+      {showEditModal && editingRestaurant && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-xl font-bold mb-4">Edit Restaurant</h3>
+            
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              let imageUrl = editingRestaurant.restaurantImage || editingRestaurant.profilePhotoUrl || editingRestaurant.image || "";
+              
+              if (restaurantImage) {
+                try {
+                  imageUrl = await uploadImage(restaurantImage);
+                } catch (error) {
+                  alert('Failed to upload image. Please try again.');
+                  return;
+                }
+              }
+
+              try {
+                const response = await fetch(`${API_URL}/api/restaurant/update/${editingRestaurant._id}`, {
+                  method: 'PUT',
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    token,
+                    name: editName,
+                    outlet_count: editOutletCount,
+                    restaurantImage: imageUrl,
+                  }),
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                  setShowEditModal(false);
+                  setEditingRestaurant(null);
+                  setRestaurantImage(null);
+                  setRestaurantImagePreview(null);
+                  setEditImagePreview(null);
+                  dispatch(fetchOwnerRestaurants(token));
+                  alert('Restaurant updated successfully!');
+                } else {
+                  alert(data.message || 'Failed to update restaurant');
+                }
+              } catch (error) {
+                console.error('Error updating restaurant:', error);
+                alert('Failed to update restaurant. Please try again.');
+              }
+            }}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Restaurant Name *
+                </label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black focus:border-black"
+                  required
+                />
+              </div>
+              
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Outlet Limit
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={editOutletCount}
+                  onChange={(e) => setEditOutletCount(parseInt(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black focus:border-black"
+                  required
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Restaurant Profile Image
+                </label>
+                {editImagePreview && !restaurantImagePreview && (
+                  <div className="mb-3">
+                    <p className="text-xs text-gray-500 mb-2">Current Image:</p>
+                    <img
+                      src={editImagePreview}
+                      alt="Current"
+                      className="w-full h-48 object-cover rounded-lg border border-gray-300"
+                    />
+                  </div>
+                )}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/webp"
+                  onChange={handleImageSelect}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black focus:border-black"
+                  disabled={uploadingImage}
+                />
+                {restaurantImagePreview && (
+                  <div className="mt-3">
+                    <p className="text-xs text-gray-500 mb-2">New Image Preview:</p>
+                    <img
+                      src={restaurantImagePreview}
+                      alt="Preview"
+                      className="w-full h-48 object-cover rounded-lg border border-gray-300"
+                    />
+                  </div>
+                )}
+                <p className="text-xs text-gray-500 mt-1">
+                  Max size: 5MB. Accepted formats: JPEG, PNG, WebP
+                </p>
+              </div>
+              
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditingRestaurant(null);
+                    setRestaurantImage(null);
+                    setRestaurantImagePreview(null);
+                    setEditImagePreview(null);
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded hover:bg-gray-50 transition"
+                  disabled={uploadingImage}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-black text-white rounded hover:bg-gray-800 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  disabled={uploadingImage}
+                >
+                  {uploadingImage ? 'Uploading...' : 'Update'}
                 </button>
               </div>
             </form>

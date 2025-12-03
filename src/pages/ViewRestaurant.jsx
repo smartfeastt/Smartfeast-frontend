@@ -131,22 +131,41 @@ export default function ViewRestaurant() {
       {/* Restaurant Header */}
       <div className="bg-white">
         <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex justify-between items-center">
-            <h1 className="text-3xl font-bold text-gray-900">{restaurant.name}</h1>
-            {user?.type === 'user' && (
-              <button
-                onClick={toggleFavorite}
-                disabled={favoriteLoading}
-                className={`p-3 rounded-full transition-colors ${
-                  isFavorite
-                    ? 'bg-red-50 text-red-500 hover:bg-red-100'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-                title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-              >
-                <Heart size={24} className={isFavorite ? 'fill-current' : ''} />
-              </button>
-            )}
+          <div className="flex flex-col md:flex-row gap-6">
+            {/* Restaurant Image */}
+            <div className="w-full md:w-1/3 lg:w-1/4">
+              <div className="aspect-w-1 aspect-h-1 bg-gray-200 rounded-lg overflow-hidden">
+                <img
+                  src={restaurant?.restaurantImage || restaurant?.profilePhotoUrl || restaurant?.image || "https://via.placeholder.com/300"}
+                  alt={restaurant?.name || "Restaurant"}
+                  className="object-cover w-full h-full"
+                  onError={(e) => {
+                    e.target.src = "https://via.placeholder.com/300";
+                  }}
+                />
+              </div>
+            </div>
+            
+            {/* Restaurant Info */}
+            <div className="flex-1">
+              <div className="flex justify-between items-start">
+                <h1 className="text-3xl font-bold text-gray-900">{restaurant.name}</h1>
+                {user?.type === 'user' && (
+                  <button
+                    onClick={toggleFavorite}
+                    disabled={favoriteLoading}
+                    className={`p-3 rounded-full transition-colors ${
+                      isFavorite
+                        ? 'bg-red-50 text-red-500 hover:bg-red-100'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                    title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                  >
+                    <Heart size={24} className={isFavorite ? 'fill-current' : ''} />
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -154,24 +173,37 @@ export default function ViewRestaurant() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <h2 className="text-2xl font-bold mb-6">Outlets</h2>
         
-        {restaurant.outlets && restaurant.outlets.length > 0 ? (
+            {restaurant.outlets && restaurant.outlets.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {restaurant.outlets.map((outlet) => (
               <Link
                 key={outlet._id}
                 to={`/view/${restaurantName}/${outlet.name}`}
-                className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition block"
+                className="bg-white rounded-lg shadow overflow-hidden hover:shadow-lg transition block"
               >
-                <div className="flex items-center gap-2 mb-2">
-                  <MapPin size={18} className="text-gray-600" />
-                  <h3 className="text-xl font-semibold text-gray-900">{outlet.name}</h3>
+                {/* Outlet Image */}
+                <div className="h-48 bg-gray-200 overflow-hidden">
+                  <img
+                    src={outlet?.outletImage || outlet?.profilePhotoUrl || outlet?.image || "https://via.placeholder.com/300"}
+                    alt={outlet?.name || "Outlet"}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.src = "https://via.placeholder.com/300";
+                    }}
+                  />
                 </div>
-                {outlet.location && (
-                  <p className="text-sm text-gray-600 mb-4">{outlet.location}</p>
-                )}
-                <div className="flex items-center text-blue-600">
-                  <span className="text-sm font-medium">View Menu</span>
-                  <ArrowRight size={16} className="ml-2" />
+                <div className="p-6">
+                  <div className="flex items-center gap-2 mb-2">
+                    <MapPin size={18} className="text-gray-600" />
+                    <h3 className="text-xl font-semibold text-gray-900">{outlet.name}</h3>
+                  </div>
+                  {outlet.location && (
+                    <p className="text-sm text-gray-600 mb-4">{outlet.location}</p>
+                  )}
+                  <div className="flex items-center text-blue-600">
+                    <span className="text-sm font-medium">View Menu</span>
+                    <ArrowRight size={16} className="ml-2" />
+                  </div>
                 </div>
               </Link>
             ))}

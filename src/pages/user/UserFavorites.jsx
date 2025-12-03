@@ -107,11 +107,14 @@ export default function UserFavorites() {
               >
                 <Link to={`/view/${restaurant.name}`}>
                   <div className="h-48 bg-gradient-to-r from-gray-200 to-gray-300 relative overflow-hidden">
-                    {restaurant.image && (
+                    {(restaurant?.restaurantImage || restaurant?.profilePhotoUrl || restaurant?.image) && (
                       <img
-                        src={restaurant.image}
+                        src={restaurant.restaurantImage || restaurant.profilePhotoUrl || restaurant.image}
                         alt={restaurant.name}
                         className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.src = '';
+                        }}
                       />
                     )}
                     <div className="absolute inset-0 bg-black bg-opacity-20 group-hover:bg-opacity-30 transition-all duration-300"></div>

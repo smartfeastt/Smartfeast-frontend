@@ -245,6 +245,16 @@ export default function UserHome() {
                   className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow overflow-hidden group"
                 >
                   <div className="h-48 bg-gradient-to-r from-gray-200 to-gray-300 relative overflow-hidden">
+                    {(restaurant?.restaurantImage || restaurant?.profilePhotoUrl || restaurant?.image) ? (
+                      <img
+                        src={restaurant.restaurantImage || restaurant.profilePhotoUrl || restaurant.image}
+                        alt={restaurant.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.src = '';
+                        }}
+                      />
+                    ) : null}
                     <div className="absolute inset-0 bg-black bg-opacity-20 group-hover:bg-opacity-30 transition-all duration-300"></div>
                     <div className="absolute bottom-4 left-4 text-white">
                       <h3 className="text-xl font-bold">{restaurant.name}</h3>

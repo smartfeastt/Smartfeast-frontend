@@ -148,9 +148,12 @@ export default function ViewOutlet() {
           <div className="w-full md:w-1/3 lg:w-1/4">
             <div className="aspect-w-1 aspect-h-1 bg-gray-200 rounded-lg overflow-hidden">
               <img
-                src={outlet?.image || "https://via.placeholder.com/300"}
+                src={outlet?.outletImage || outlet?.profilePhotoUrl || outlet?.image || "https://via.placeholder.com/300"}
                 alt={outlet?.name || "Outlet"}
                 className="object-cover w-full h-full"
+                onError={(e) => {
+                  e.target.src = "https://via.placeholder.com/300";
+                }}
               />
             </div>
           </div>
