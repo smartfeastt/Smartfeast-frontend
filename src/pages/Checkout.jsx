@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAppSelector } from "../store/hooks.js";
 import { selectCartItems, selectTotalPrice } from "../store/slices/cartSlice.js";
 import { Link, useNavigate } from "react-router-dom";
@@ -20,6 +20,36 @@ export default function Checkout() {
   
   const [paymentMethod, setPaymentMethod] = useState("card");
   const [orderType, setOrderType] = useState(""); // Required field
+  const [outletData, setOutletData] = useState(null);
+  const [loadingOutlet, setLoadingOutlet] = useState(true);
+
+  // Fetch outlet data to check delivery settings
+  useEffect(() => {
+    const fetchOutletData = async () => {
+      if (cartItems.length > 0) {
+        const outletId = cartItems[0]?.outletId;
+        if (outletId) {
+          try {
+            setLoadingOutlet(true);
+            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/outlet/${outletId}`);
+            const data = await response.json();
+            if (data.success) {
+              setOutletData(data.outlet);
+              // If delivery is disabled and user had selected delivery, reset to empty
+              if (!data.outlet.deliveryEnabled && orderType === "delivery") {
+                setOrderType("");
+              }
+            }
+          } catch (error) {
+            console.error("Error fetching outlet data:", error);
+          } finally {
+            setLoadingOutlet(false);
+          }
+        }
+      }
+    };
+    fetchOutletData();
+  }, [cartItems]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -46,6 +76,12 @@ export default function Checkout() {
     // Validate order type
     if (!orderType) {
       alert("Please select an order type (Dine-In, Takeaway, or Delivery)");
+      return;
+    }
+
+    // Validate that delivery is not selected if disabled
+    if (orderType === "delivery" && !outletData?.deliveryEnabled) {
+      alert("Delivery is currently disabled for this outlet. Please select Dine-In or Takeaway.");
       return;
     }
 
@@ -222,7 +258,7 @@ export default function Checkout() {
                     />
                     Takeaway / Pick-Up
                   </label>
-                  <label className="flex items-center">
+                  <label className={`flex items-center ${!outletData?.deliveryEnabled ? 'opacity-60' : ''}`}>
                     <input
                       type="radio"
                       name="orderType"
@@ -230,9 +266,15 @@ export default function Checkout() {
                       checked={orderType === "delivery"}
                       onChange={(e) => setOrderType(e.target.value)}
                       className="mr-2"
+                      disabled={!outletData?.deliveryEnabled}
                       required
                     />
-                    Delivery
+                    <span className="flex-1">
+                      Delivery
+                      {!outletData?.deliveryEnabled && (
+                        <span className="text-xs text-gray-500 ml-2">(Currently unavailable)</span>
+                      )}
+                    </span>
                   </label>
                 </div>
               </div>

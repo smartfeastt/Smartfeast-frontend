@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAppSelector, useAppDispatch } from '../../store/hooks.js'
 import { fetchOutletOrders, updateOrderStatus } from '../../store/slices/ordersSlice.js'
-import { Plus, Users, ArrowLeft, UserPlus, X, Package, Clock, CheckCircle } from 'react-feather'
+import { Plus, Users, ArrowLeft, UserPlus, X, Package, Clock, CheckCircle, Truck } from 'react-feather'
 import DynamicHeader from '../../components/headers/DynamicHeader.jsx'
 import io from 'socket.io-client'
 
@@ -20,6 +20,7 @@ export default function OwnerOutlet() {
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [managerEmail, setManagerEmail] = useState('')
   const [managerPassword, setManagerPassword] = useState('')
+  const [updatingDelivery, setUpdatingDelivery] = useState(false)
 
   useEffect(() => {
     fetchOutlet()
@@ -152,6 +153,35 @@ export default function OwnerOutlet() {
     }
   }
 
+  const handleToggleDelivery = async () => {
+    try {
+      setUpdatingDelivery(true);
+      const response = await fetch(`${API_URL}/api/outlet/update/${outletId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          token,
+          deliveryEnabled: !outlet.deliveryEnabled,
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setOutlet(data.outlet);
+      } else {
+        alert(data.message || 'Failed to update delivery settings');
+      }
+    } catch (error) {
+      console.error('Error updating delivery settings:', error);
+      alert('Failed to update delivery settings');
+    } finally {
+      setUpdatingDelivery(false);
+    }
+  }
+
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>
@@ -230,6 +260,37 @@ export default function OwnerOutlet() {
             </button>
           </div>
           <p className="text-sm text-gray-600">{items.length} items</p>
+        </div>
+
+        {/* Delivery Settings Section */}
+        <div className="bg-white rounded-lg shadow p-6 mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <Truck size={20} />
+              Delivery Settings
+            </h2>
+          </div>
+          <div className="flex items-center justify-between py-3 border-b border-gray-200">
+            <div>
+              <p className="font-medium text-gray-900">Enable Delivery</p>
+              <p className="text-sm text-gray-600">
+                When disabled, customers can see the delivery option but cannot select it
+              </p>
+            </div>
+            <button
+              onClick={handleToggleDelivery}
+              disabled={updatingDelivery}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                outlet.deliveryEnabled ? 'bg-black' : 'bg-gray-200'
+              } ${updatingDelivery ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  outlet.deliveryEnabled ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
         </div>
 
         {/* Orders Section */}
