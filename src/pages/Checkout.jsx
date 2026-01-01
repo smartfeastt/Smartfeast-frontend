@@ -1,15 +1,41 @@
-import { useState, useEffect } from "react";
-import { useAppSelector } from "../store/hooks.js";
-import { selectCartItems, selectTotalPrice } from "../store/slices/cartSlice.js";
-import { Link, useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { useAppSelector, useAppDispatch } from "../store/hooks.js";
+import { selectCartItems, selectTotalPrice, clearCart } from "../store/slices/cartSlice.js";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, CreditCard, MapPin, User } from "react-feather";
 import DynamicHeader from "../components/headers/DynamicHeader.jsx";
 
 export default function Checkout() {
-  const cartItems = useAppSelector(selectCartItems);
-  const totalPrice = useAppSelector(selectTotalPrice);
-  const { user } = useAppSelector((state) => state.auth);
+  const allCartItems = useAppSelector(selectCartItems);
+  const location = useLocation();
+  const { user, token } = useAppSelector((state) => state.auth);
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
+  
+  // Get selected items from location state (passed from Cart page)
+  const selectedItemIdsFromState = location.state?.selectedItemIds || null;
+  const [selectedItems, setSelectedItems] = useState(new Set());
+  const initializedRef = useRef(false);
+
+  // Initialize selected items (only once)
+  useEffect(() => {
+    if (!initializedRef.current) {
+      if (selectedItemIdsFromState && selectedItemIdsFromState.length > 0) {
+        // Use items passed from Cart page
+        setSelectedItems(new Set(selectedItemIdsFromState));
+      } else if (allCartItems.length > 0) {
+        // Default: select all items
+        setSelectedItems(new Set(allCartItems.map(item => item._id)));
+      }
+      initializedRef.current = true;
+    }
+  }, [selectedItemIdsFromState, allCartItems]);
+
+  // Filter to only selected items
+  const cartItems = allCartItems.filter(item => selectedItems.has(item._id));
+  
+  // Calculate total for selected items only
+  const totalPrice = cartItems.reduce((total, item) => total + (item.itemPrice * item.quantity), 0);
   
   const [customerInfo, setCustomerInfo] = useState({
     name: user?.name || "",
@@ -19,6 +45,7 @@ export default function Checkout() {
   });
   
   const [paymentMethod, setPaymentMethod] = useState("card");
+  const [paymentType, setPaymentType] = useState("pay_now"); // pay_now or pay_later
   const [orderType, setOrderType] = useState(""); // Required field
   const [outletData, setOutletData] = useState(null);
   const [loadingOutlet, setLoadingOutlet] = useState(true);
@@ -49,7 +76,7 @@ export default function Checkout() {
       }
     };
     fetchOutletData();
-  }, [cartItems]);
+  }, [cartItems, orderType]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -57,6 +84,24 @@ export default function Checkout() {
       ...prev,
       [name]: value
     }));
+  };
+
+  const handleToggleItem = (itemId) => {
+    const newSelected = new Set(selectedItems);
+    if (newSelected.has(itemId)) {
+      newSelected.delete(itemId);
+    } else {
+      newSelected.add(itemId);
+    }
+    setSelectedItems(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedItems.size === allCartItems.length) {
+      setSelectedItems(new Set());
+    } else {
+      setSelectedItems(new Set(allCartItems.map(item => item._id)));
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -109,15 +154,55 @@ export default function Checkout() {
       totalPrice: finalTotal,
       deliveryAddress: customerInfo.address,
       paymentMethod: paymentMethod,
+      paymentType: paymentType,
       orderType: orderType,
     };
 
     const paymentData = {
       paymentMethod: paymentMethod,
+      paymentType: paymentType,
       customerInfo: customerInfo,
     };
 
-    // Redirect to payment page
+    // If Pay Later, create order directly and skip payment page
+    if (paymentType === "pay_later") {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/order/create`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token && { 'Authorization': `Bearer ${token}` }),
+          },
+          body: JSON.stringify({
+            ...orderData,
+            customerInfo: user ? undefined : customerInfo,
+          }),
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          // Clear cart
+          dispatch(clearCart());
+          // Redirect to order confirmation
+          navigate(`/payment/verify/${data.order._id}`, {
+            state: {
+              orderId: data.order._id,
+              orderNumber: data.order.orderNumber,
+              totalPrice: finalTotal,
+              paymentPending: true,
+            }
+          });
+        } else {
+          alert(data.message || "Failed to create order");
+        }
+      } catch (error) {
+        console.error("Error creating order:", error);
+        alert("Failed to create order. Please try again.");
+      }
+      return;
+    }
+
+    // If Pay Now, redirect to payment page
     navigate("/payment", {
       state: {
         orderData,
@@ -126,13 +211,27 @@ export default function Checkout() {
     });
   };
 
-  if (cartItems.length === 0) {
+  if (allCartItems.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <h2 className="text-2xl font-bold mb-4">Your cart is empty</h2>
           <Link to="/" className="text-blue-600 hover:underline">
             Continue Shopping
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (cartItems.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-4">No items selected</h2>
+          <p className="text-gray-600 mb-4">Please select at least one item to proceed with checkout.</p>
+          <Link to="/cart" className="text-blue-600 hover:underline">
+            Back to Cart
           </Link>
         </div>
       </div>
@@ -279,88 +378,165 @@ export default function Checkout() {
                 </div>
               </div>
 
-              {/* Payment Method */}
+              {/* Payment Type */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-3 flex items-center gap-1">
                   <CreditCard size={16} />
-                  Payment Method
+                  Payment Type
                 </label>
-                <div className="space-y-2">
-                  <label className="flex items-center">
+                <div className="space-y-3 mb-4">
+                  <label className="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
                     <input
                       type="radio"
-                      name="payment"
-                      value="card"
-                      checked={paymentMethod === "card"}
-                      onChange={(e) => setPaymentMethod(e.target.value)}
-                      className="mr-2"
+                      name="paymentType"
+                      value="pay_now"
+                      checked={paymentType === "pay_now"}
+                      onChange={(e) => setPaymentType(e.target.value)}
+                      className="mr-3"
                     />
-                    Credit/Debit Card
+                    <div className="flex-1">
+                      <span className="font-medium text-gray-900">Pay Now</span>
+                      <p className="text-xs text-gray-600">Pay immediately via payment method</p>
+                    </div>
                   </label>
-                  <label className="flex items-center">
+                  <label className="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
                     <input
                       type="radio"
-                      name="payment"
-                      value="upi"
-                      checked={paymentMethod === "upi"}
-                      onChange={(e) => setPaymentMethod(e.target.value)}
-                      className="mr-2"
+                      name="paymentType"
+                      value="pay_later"
+                      checked={paymentType === "pay_later"}
+                      onChange={(e) => setPaymentType(e.target.value)}
+                      className="mr-3"
                     />
-                    UPI
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      name="payment"
-                      value="cod"
-                      checked={paymentMethod === "cod"}
-                      onChange={(e) => setPaymentMethod(e.target.value)}
-                      className="mr-2"
-                    />
-                    Cash on Delivery
+                    <div className="flex-1">
+                      <span className="font-medium text-gray-900">Pay Later</span>
+                      <p className="text-xs text-gray-600">Pay at the restaurant/counter</p>
+                    </div>
                   </label>
                 </div>
+
+                {/* Payment Method (only show if Pay Now is selected) */}
+                {paymentType === "pay_now" && (
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                      Payment Method
+                    </label>
+                    <div className="space-y-2">
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          name="payment"
+                          value="card"
+                          checked={paymentMethod === "card"}
+                          onChange={(e) => setPaymentMethod(e.target.value)}
+                          className="mr-2"
+                        />
+                        Credit/Debit Card
+                      </label>
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          name="payment"
+                          value="upi"
+                          checked={paymentMethod === "upi"}
+                          onChange={(e) => setPaymentMethod(e.target.value)}
+                          className="mr-2"
+                        />
+                        UPI
+                      </label>
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          name="payment"
+                          value="cash"
+                          checked={paymentMethod === "cash"}
+                          onChange={(e) => setPaymentMethod(e.target.value)}
+                          className="mr-2"
+                        />
+                        Cash on Delivery
+                      </label>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <button
                 type="submit"
-                className="w-full bg-black text-white py-3 rounded-md hover:bg-gray-800 transition-colors"
+                disabled={selectedItems.size === 0}
+                className={`w-full py-3 rounded-md transition-colors ${
+                  selectedItems.size === 0
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-black text-white hover:bg-gray-800'
+                }`}
               >
-                Proceed to Payment - ₹{(totalPrice + 30 + (totalPrice * 0.05)).toFixed(2)}
+                {selectedItems.size === 0 
+                  ? 'Select items to proceed'
+                  : `Proceed to Payment - ₹${(totalPrice + 30 + (totalPrice * 0.05)).toFixed(2)}`
+                }
               </button>
             </form>
           </div>
 
           {/* Order Summary */}
           <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold mb-6">Order Summary</h2>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold">Order Summary</h2>
+              {allCartItems.length > 1 && (
+                <label className="flex items-center gap-2 cursor-pointer text-sm">
+                  <input
+                    type="checkbox"
+                    checked={selectedItems.size === allCartItems.length}
+                    onChange={handleSelectAll}
+                    className="w-4 h-4 text-black border-gray-300 rounded focus:ring-black"
+                  />
+                  <span className="text-gray-600">
+                    {selectedItems.size === allCartItems.length ? 'Deselect All' : 'Select All'}
+                  </span>
+                </label>
+              )}
+            </div>
             
             <div className="space-y-4 mb-6">
-              {cartItems.map((item) => (
-                <div key={item._id} className="flex items-center gap-3 pb-4 border-b">
-                  {item.itemPhoto && (
-                    <img
-                      src={item.itemPhoto}
-                      alt={item.itemName}
-                      className="w-16 h-16 object-cover rounded"
+              {allCartItems.map((item) => {
+                const isSelected = selectedItems.has(item._id);
+                return (
+                  <div key={item._id} className={`flex items-center gap-3 pb-4 border-b ${!isSelected ? 'opacity-50' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => handleToggleItem(item._id)}
+                      className="w-4 h-4 text-black border-gray-300 rounded focus:ring-black"
                     />
-                  )}
-                  <div className="flex-1">
-                    <h3 className="font-medium">{item.itemName}</h3>
-                    <p className="text-sm text-gray-600">₹{item.itemPrice} × {item.quantity}</p>
+                    {item.itemPhoto && (
+                      <img
+                        src={item.itemPhoto}
+                        alt={item.itemName}
+                        className="w-16 h-16 object-cover rounded"
+                      />
+                    )}
+                    <div className="flex-1">
+                      <h3 className="font-medium">{item.itemName}</h3>
+                      <p className="text-sm text-gray-600">₹{item.itemPrice} × {item.quantity}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-medium">
+                        ₹{(item.itemPrice * item.quantity).toFixed(2)}
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="font-medium">
-                      ₹{(item.itemPrice * item.quantity).toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
+            
+            {selectedItems.size === 0 && (
+              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-800">Please select at least one item to proceed.</p>
+              </div>
+            )}
 
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span>Subtotal:</span>
+                <span>Subtotal ({selectedItems.size} items):</span>
                 <span>₹{totalPrice.toFixed(2)}</span>
               </div>
               <div className="flex justify-between">

@@ -41,6 +41,7 @@ export default function Payment() {
         totalPrice: finalTotal,
         deliveryAddress: orderData.deliveryAddress,
         paymentMethod: paymentData.paymentMethod,
+        paymentType: orderData.paymentType || 'pay_now',
         customerInfo: paymentData.customerInfo,
         orderType: orderData.orderType, // Include order type
         token: token || null, // Token is optional for guest orders

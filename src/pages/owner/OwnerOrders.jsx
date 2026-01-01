@@ -34,6 +34,7 @@ export default function OwnerOrders() {
     restaurant: "all",
     outlet: "all",
     orderType: "all",
+    paymentType: "all", // all, pay_now, pay_later
     dateRange: "today",
     searchQuery: ""
   });
@@ -137,6 +138,7 @@ export default function OwnerOrders() {
           paymentMethod: order.paymentMethod,
           deliveryAddress: order.deliveryAddress,
           orderType: order.orderType || 'delivery', // Default to delivery for backward compatibility
+          paymentType: order.paymentType || 'pay_now', // Default to pay_now for backward compatibility
         }));
         
         setOrders(transformedOrders);
@@ -173,6 +175,11 @@ export default function OwnerOrders() {
     // Order type filter
     if (filters.orderType !== "all") {
       filtered = filtered.filter(order => order.orderType === filters.orderType);
+    }
+
+    // Payment type filter
+    if (filters.paymentType !== "all") {
+      filtered = filtered.filter(order => order.paymentType === filters.paymentType);
     }
 
     // Search filter
@@ -411,6 +418,43 @@ export default function OwnerOrders() {
               >
                 Delivery
               </button>
+            </div>
+            
+            {/* Payment Type Filter Bar */}
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-medium text-gray-700">Payment Type:</span>
+                <button
+                  onClick={() => setFilters(prev => ({ ...prev, paymentType: "all" }))}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    filters.paymentType === "all"
+                      ? "bg-black text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setFilters(prev => ({ ...prev, paymentType: "pay_now" }))}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    filters.paymentType === "pay_now"
+                      ? "bg-black text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  Pay Now
+                </button>
+                <button
+                  onClick={() => setFilters(prev => ({ ...prev, paymentType: "pay_later" }))}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    filters.paymentType === "pay_later"
+                      ? "bg-black text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  Pay Later
+                </button>
+              </div>
             </div>
           </div>
         </div>

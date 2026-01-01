@@ -96,15 +96,102 @@ export default function UserOrders() {
     return status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ');
   };
 
-  // Filter orders by active tab (moved after helper functions)
+  // Filter orders by active tab
   const filteredOrders = orders.filter(order => {
     if (activeTab === "all") return true;
+    if (activeTab === "pay_now") return order.paymentType === 'pay_now';
+    if (activeTab === "pay_later") return order.paymentType === 'pay_later';
     return order.status === activeTab;
   });
 
-  const handleReorder = (order) => {
-    // In real app, add items to cart and redirect to restaurant
-    alert(`Reordering from ${order.restaurantId?.name || 'Restaurant'}...`);
+  const handleReorder = async (order) => {
+    try {
+      if (!token) {
+        alert('Please login to reorder');
+        return;
+      }
+
+      // Check if order allows reordering (not cancelled, not delivered long ago, etc.)
+      if (order.status === 'cancelled') {
+        alert('Cannot reorder a cancelled order');
+        return;
+      }
+
+      // If parent order is Pay Later, add items directly to that order
+      if (order.paymentType === 'pay_later') {
+        const confirmed = window.confirm(
+          `This order was "Pay Later". Adding items will be added directly to Order #${order.orderNumber}. Continue?`
+        );
+        
+        if (!confirmed) return;
+
+        const response = await fetch(`${API_URL}/api/order/${order._id}/add-items`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            items: order.items.map(item => ({
+              itemId: item.itemId || item._id,
+              itemName: item.itemName,
+              itemPrice: item.itemPrice,
+              quantity: item.quantity,
+              itemPhoto: item.itemPhoto,
+            })),
+          }),
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          alert(`Items added to Order #${order.orderNumber} successfully!`);
+          dispatch(fetchUserOrders(token)); // Refresh orders
+        } else {
+          alert(data.message || 'Failed to add items to order');
+        }
+      } else {
+        // Pay Now: require payment for new items
+        // For now, we'll add items to the order and redirect to payment
+        const confirmed = window.confirm(
+          `This order was "Pay Now". You will need to pay for the reordered items. Continue?`
+        );
+        
+        if (!confirmed) return;
+
+        const response = await fetch(`${API_URL}/api/order/${order._id}/add-items`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            items: order.items.map(item => ({
+              itemId: item.itemId || item._id,
+              itemName: item.itemName,
+              itemPrice: item.itemPrice,
+              quantity: item.quantity,
+              itemPhoto: item.itemPhoto,
+            })),
+          }),
+        });
+
+        const data = await response.json();
+        if (data.success && data.requiresPayment) {
+          // Redirect to payment for the new items
+          alert(`Items added. You need to pay ₹${data.newItemsTotal.toFixed(2)} for the new items.`);
+          // TODO: Navigate to payment page for new items amount
+          dispatch(fetchUserOrders(token)); // Refresh orders
+        } else if (data.success) {
+          alert(`Items added to Order #${order.orderNumber} successfully!`);
+          dispatch(fetchUserOrders(token)); // Refresh orders
+        } else {
+          alert(data.message || 'Failed to add items to order');
+        }
+      }
+    } catch (error) {
+      console.error('Error reordering:', error);
+      alert('Failed to reorder. Please try again.');
+    }
   };
 
   const handleRateOrder = (orderId) => {
@@ -133,9 +220,11 @@ export default function UserOrders() {
         {/* Tabs */}
         <div className="bg-white rounded-lg shadow mb-6">
           <div className="border-b border-gray-200">
-            <nav className="flex space-x-8 px-6">
+            <nav className="flex space-x-8 px-6 overflow-x-auto">
               {[
                 { key: "all", label: "All Orders", count: orders.length },
+                { key: "pay_now", label: "Pay Now", count: orders.filter(o => o.paymentType === 'pay_now').length },
+                { key: "pay_later", label: "Pay Later", count: orders.filter(o => o.paymentType === 'pay_later').length },
                 { key: "pending", label: "Pending", count: orders.filter(o => o.status === "pending").length },
                 { key: "confirmed", label: "Confirmed", count: orders.filter(o => o.status === "confirmed").length },
                 { key: "preparing", label: "Preparing", count: orders.filter(o => o.status === "preparing").length },
@@ -221,6 +310,11 @@ export default function UserOrders() {
                   <p className="text-sm text-gray-600">
                     <strong>Payment:</strong> {order.paymentMethod} ({order.paymentStatus})
                   </p>
+                  {order.paymentType && (
+                    <p className="text-sm text-gray-600">
+                      <strong>Payment Type:</strong> <span className="capitalize">{order.paymentType.replace('_', ' ')}</span>
+                    </p>
+                  )}
                 </div>
 
                 {/* Action Buttons */}
