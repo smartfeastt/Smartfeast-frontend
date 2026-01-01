@@ -122,6 +122,19 @@ const ordersSlice = createSlice({
     addOrder: (state, action) => {
       state.userOrders.unshift(action.payload);
     },
+    addOrUpdateOutletOrder: (state, action) => {
+      const order = action.payload;
+      const orderId = order._id || order.id;
+      const outletIndex = state.outletOrders.findIndex((o) => (o._id || o.id) === orderId);
+      
+      if (outletIndex !== -1) {
+        // Update existing order
+        state.outletOrders[outletIndex] = { ...state.outletOrders[outletIndex], ...order };
+      } else {
+        // Add new order to the beginning of the array
+        state.outletOrders.unshift(order);
+      }
+    },
     updateOrder: (state, action) => {
       const updatedOrder = action.payload;
       const userIndex = state.userOrders.findIndex((o) => o._id === updatedOrder._id);
@@ -196,7 +209,7 @@ const ordersSlice = createSlice({
   },
 });
 
-export const { addOrder, updateOrder, clearOrders } = ordersSlice.actions;
+export const { addOrder, addOrUpdateOutletOrder, updateOrder, clearOrders } = ordersSlice.actions;
 
 // Selectors
 export const selectUserOrders = (state) => state.orders.userOrders;

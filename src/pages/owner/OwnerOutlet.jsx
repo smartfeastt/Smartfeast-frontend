@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAppSelector, useAppDispatch } from '../../store/hooks.js'
-import { fetchOutletOrders, updateOrderStatus } from '../../store/slices/ordersSlice.js'
+import { fetchOutletOrders, updateOrderStatus, addOrUpdateOutletOrder } from '../../store/slices/ordersSlice.js'
 import { Plus, Users, ArrowLeft, UserPlus, X, Package, Clock, CheckCircle, Truck } from 'react-feather'
 import DynamicHeader from '../../components/headers/DynamicHeader.jsx'
 import io from 'socket.io-client'
@@ -25,6 +25,7 @@ export default function OwnerOutlet() {
 
   useEffect(() => {
     fetchOutlet()
+    fetchItems()
     if (token && outletId) {
       dispatch(fetchOutletOrders({ outletId, token }))
     }
@@ -39,21 +40,70 @@ export default function OwnerOutlet() {
     });
 
     socket.on('connect', () => {
-      console.log('Socket connected');
+      console.log('[OwnerOutlet] Socket connected, joining outlet room:', outletId);
       socket.emit('join-outlet', outletId);
     });
 
     socket.on('new-order', (order) => {
-      console.log('New order received:', order);
-      dispatch(fetchOutletOrders({ outletId, token }));
+      console.log('[OwnerOutlet] New order received:', order);
+      console.log('[OwnerOutlet] Order outletId:', order.outletId);
+      console.log('[OwnerOutlet] Current outletId:', outletId);
+      
+      // Check if order belongs to this outlet - handle different formats
+      const orderOutletId = order.outletId?._id?.toString() || 
+                           order.outletId?.toString() || 
+                           order.outletId;
+      const currentOutletId = outletId.toString();
+      
+      console.log('[OwnerOutlet] Comparing:', orderOutletId, '===', currentOutletId);
+      
+      if (orderOutletId === currentOutletId) {
+        console.log('[OwnerOutlet] Adding order to Redux store - order:', order);
+        // Note: Order might not be paid yet, but we add it anyway
+        // The UI should handle filtering if needed, but usually orders show up once paid
+        dispatch(addOrUpdateOutletOrder(order));
+      } else {
+        console.log('[OwnerOutlet] Order outletId does not match, ignoring. Expected:', currentOutletId, 'Got:', orderOutletId);
+      }
     });
 
     socket.on('order-updated', (order) => {
-      console.log('Order updated:', order);
-      dispatch(fetchOutletOrders({ outletId, token }));
+      console.log('[OwnerOutlet] Order updated:', order);
+      // Check if order belongs to this outlet
+      const orderOutletId = order.outletId?._id?.toString() || 
+                           order.outletId?.toString() || 
+                           order.outletId;
+      const currentOutletId = outletId.toString();
+      
+      if (orderOutletId === currentOutletId) {
+        console.log('[OwnerOutlet] Updating order in Redux store');
+        dispatch(addOrUpdateOutletOrder(order));
+      }
+    });
+
+    socket.on('payment-updated', (order) => {
+      console.log('[OwnerOutlet] Payment updated:', order);
+      // Check if order belongs to this outlet
+      const orderOutletId = order.outletId?._id?.toString() || 
+                           order.outletId?.toString() || 
+                           order.outletId;
+      const currentOutletId = outletId.toString();
+      
+      if (orderOutletId === currentOutletId) {
+        console.log('[OwnerOutlet] Payment updated - adding/updating order in Redux store');
+        // Only add if payment is paid (matches what getOutletOrders returns)
+        if (order.paymentStatus === 'paid') {
+          dispatch(addOrUpdateOutletOrder(order));
+        }
+      }
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('[OwnerOutlet] Socket connection error:', error);
     });
 
     return () => {
+      console.log('[OwnerOutlet] Cleaning up socket connection');
       socket.disconnect();
     };
   }, [outletId, token, dispatch])
@@ -70,6 +120,12 @@ export default function OwnerOutlet() {
       const data = await response.json()
       if (data.success) {
         setOutlet(data.outlet)
+        // Debug: Log managers to check if they're populated
+        if (data.outlet?.managers) {
+          console.log('Outlet managers data:', JSON.stringify(data.outlet.managers, null, 2))
+        }
+      } else {
+        console.error('Failed to fetch outlet:', data.message)
       }
     } catch (error) {
       console.error('Error fetching outlet:', error)
@@ -79,6 +135,8 @@ export default function OwnerOutlet() {
   }
 
   const fetchItems = async () => {
+    if (!token || !outletId) return;
+    
     try {
       const response = await fetch(`${API_URL}/api/item/outlet/${outletId}`, {
         method: 'GET',
@@ -91,9 +149,13 @@ export default function OwnerOutlet() {
       const data = await response.json()
       if (data.success) {
         setItems(data.items || [])
+      } else {
+        console.error('Failed to fetch items:', data.message)
+        setItems([])
       }
     } catch (error) {
       console.error('Error fetching items:', error)
+      setItems([])
     }
   }
 
@@ -225,23 +287,39 @@ export default function OwnerOutlet() {
           </div>
           {outlet.managers && outlet.managers.length > 0 ? (
             <div className="space-y-2">
-              {outlet.managers.map((manager) => (
-                <div
-                  key={manager._id}
-                  className="flex justify-between items-center p-3 bg-gray-50 rounded"
-                >
-                  <div>
-                    <p className="font-medium text-gray-900">{manager.name}</p>
-                    <p className="text-sm text-gray-600">{manager.email}</p>
-                  </div>
-                  <button
-                    onClick={() => handleRemoveManager(manager._id)}
-                    className="text-red-600 hover:text-red-800"
+              {outlet.managers.map((manager) => {
+                // Handle both populated and non-populated manager objects
+                // If manager is just an ID string, we can't display it properly
+                const managerId = typeof manager === 'string' ? manager : (manager._id || manager);
+                const managerName = manager?.name || (manager?.email ? manager.email.split('@')[0] : 'Unknown');
+                const managerEmail = manager?.email || '';
+                
+                // Debug log
+                console.log('Manager data:', manager, 'Name:', managerName, 'Email:', managerEmail);
+                
+                return (
+                  <div
+                    key={managerId}
+                    className="flex justify-between items-center p-3 bg-gray-50 rounded border border-gray-200"
                   >
-                    <X size={18} />
-                  </button>
-                </div>
-              ))}
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900 mb-1">{managerName}</p>
+                      {managerEmail ? (
+                        <p className="text-sm text-gray-900 font-normal">{managerEmail}</p>
+                      ) : (
+                        <p className="text-xs text-red-500 italic">⚠ Email not populated - check backend</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleRemoveManager(managerId)}
+                      className="text-red-600 hover:text-red-800 ml-4"
+                      title="Remove manager"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <p className="text-gray-600">No managers assigned</p>

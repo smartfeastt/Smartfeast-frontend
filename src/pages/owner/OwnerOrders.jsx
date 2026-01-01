@@ -202,15 +202,23 @@ export default function OwnerOrders() {
     setFilteredOrders(filtered);
   };
 
-  const updateOrderStatus = async (orderId, newStatus) => {
+  const handleUpdateOrderStatus = async (orderId, newStatus) => {
     try {
       if (!token) return;
       
-      const order = orders.find(o => o._id === orderId || o.id === orderId);
-      if (!order) return;
+      // Find order by id or _id (id might be orderNumber string, _id is the actual MongoDB _id)
+      const order = orders.find(o => o._id === orderId || o.id === orderId || o._id?.toString() === orderId?.toString());
+      if (!order) {
+        console.error("Order not found:", orderId);
+        alert("Order not found. Please refresh the page.");
+        return;
+      }
+      
+      // Use the actual MongoDB _id for the API call
+      const actualOrderId = order._id || orderId;
       
       await dispatch(updateOrderStatus({ 
-        orderId: order._id, 
+        orderId: actualOrderId, 
         status: newStatus, 
         token 
       })).unwrap();
@@ -219,7 +227,7 @@ export default function OwnerOrders() {
       await fetchRestaurantsAndOrders();
     } catch (error) {
       console.error("Error updating order status:", error);
-      alert("Failed to update order status. Please try again.");
+      alert(error?.message || "Failed to update order status. Please try again.");
     }
   };
 
@@ -534,18 +542,30 @@ export default function OwnerOrders() {
                     {order.status !== "delivered" && order.status !== "cancelled" && (
                       <>
                         <button
-                          onClick={() => updateOrderStatus(order.id, "cancelled")}
+                          onClick={() => {
+                            if (window.confirm("Are you sure you want to cancel this order?")) {
+                              handleUpdateOrderStatus(order._id || order.id, "cancelled");
+                            }
+                          }}
                           className="px-3 py-1 text-sm border border-red-300 text-red-600 rounded hover:bg-red-50 transition-colors"
                         >
-                          Cancel
+                          Cancel Order
                         </button>
                         {(() => {
                           const nextAction = getNextStatusAction(order.status, order.orderType);
                           if (nextAction) {
+                            const buttonColorClass = 
+                              order.status === 'pending' ? 'bg-blue-600 hover:bg-blue-700' :
+                              order.status === 'confirmed' ? 'bg-purple-600 hover:bg-purple-700' :
+                              order.status === 'preparing' ? 'bg-green-600 hover:bg-green-700' :
+                              order.status === 'ready' ? 'bg-orange-600 hover:bg-orange-700' :
+                              order.status === 'out_for_delivery' ? 'bg-orange-600 hover:bg-orange-700' :
+                              'bg-black hover:bg-gray-800';
+                            
                             return (
                               <button
-                                onClick={() => updateOrderStatus(order.id, nextAction.nextStatus)}
-                                className="px-3 py-1 text-sm bg-black text-white rounded hover:bg-gray-800 transition-colors"
+                                onClick={() => handleUpdateOrderStatus(order._id || order.id, nextAction.nextStatus)}
+                                className={`px-3 py-1 text-sm ${buttonColorClass} text-white rounded transition-colors`}
                               >
                                 {nextAction.label}
                               </button>
@@ -554,6 +574,16 @@ export default function OwnerOrders() {
                           return null;
                         })()}
                       </>
+                    )}
+                    {order.status === "delivered" && (
+                      <span className="px-3 py-1 text-sm text-green-600 font-medium">
+                        Order Completed
+                      </span>
+                    )}
+                    {order.status === "cancelled" && (
+                      <span className="px-3 py-1 text-sm text-red-600 font-medium">
+                        Order Cancelled
+                      </span>
                     )}
                   </div>
                 </div>
