@@ -5,6 +5,7 @@ import { fetchOutletOrders, updateOrderStatus } from '../../store/slices/ordersS
 import { Plus, Users, ArrowLeft, UserPlus, X, Package, Clock, CheckCircle, Truck } from 'react-feather'
 import DynamicHeader from '../../components/headers/DynamicHeader.jsx'
 import io from 'socket.io-client'
+import { getOrderStatusLabel, getNextStatusAction } from '../../utils/orderStatus.js'
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -330,14 +331,14 @@ export default function OwnerOutlet() {
                               ? 'bg-blue-100 text-blue-800'
                               : order.status === 'preparing'
                               ? 'bg-purple-100 text-purple-800'
-                              : order.status === 'ready'
+                              : order.status === 'ready' || order.status === 'out_for_delivery'
                               ? 'bg-green-100 text-green-800'
                               : order.status === 'delivered'
                               ? 'bg-gray-100 text-gray-800'
                               : 'bg-red-100 text-red-800'
                           }`}
                         >
-                          {order.status}
+                          {getOrderStatusLabel(order.status, order.orderType)}
                         </span>
                         <span
                           className={`px-2 py-1 text-xs rounded-full ${
@@ -387,46 +388,27 @@ export default function OwnerOutlet() {
                       <strong>Delivery:</strong> {order.deliveryAddress}
                     </p>
                     <div className="flex gap-2">
-                      {order.status === 'pending' && (
-                        <button
-                          onClick={() => handleUpdateStatus(order._id, 'confirmed')}
-                          className="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
-                        >
-                          Confirm Order
-                        </button>
-                      )}
-                      {order.status === 'confirmed' && (
-                        <button
-                          onClick={() => handleUpdateStatus(order._id, 'preparing')}
-                          className="flex-1 px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 text-sm"
-                        >
-                          Start Preparing
-                        </button>
-                      )}
-                      {order.status === 'preparing' && (
-                        <button
-                          onClick={() => handleUpdateStatus(order._id, 'ready')}
-                          className="flex-1 px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
-                        >
-                          Mark Ready
-                        </button>
-                      )}
-                      {order.status === 'ready' && (
-                        <button
-                          onClick={() => handleUpdateStatus(order._id, 'out_for_delivery')}
-                          className="flex-1 px-3 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 text-sm"
-                        >
-                          Out for Delivery
-                        </button>
-                      )}
-                      {order.status === 'out_for_delivery' && (
-                        <button
-                          onClick={() => handleUpdateStatus(order._id, 'delivered')}
-                          className="flex-1 px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm"
-                        >
-                          Mark Delivered
-                        </button>
-                      )}
+                      {(() => {
+                        const nextAction = getNextStatusAction(order.status, order.orderType);
+                        if (nextAction) {
+                          const buttonColorClass = 
+                            order.status === 'pending' ? 'bg-blue-600 hover:bg-blue-700' :
+                            order.status === 'confirmed' ? 'bg-purple-600 hover:bg-purple-700' :
+                            order.status === 'preparing' ? 'bg-green-600 hover:bg-green-700' :
+                            order.status === 'ready' ? 'bg-orange-600 hover:bg-orange-700' :
+                            'bg-gray-600 hover:bg-gray-700';
+                          
+                          return (
+                            <button
+                              onClick={() => handleUpdateStatus(order._id, nextAction.nextStatus)}
+                              className={`flex-1 px-3 py-2 ${buttonColorClass} text-white rounded text-sm`}
+                            >
+                              {nextAction.label}
+                            </button>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   </div>
                 </div>

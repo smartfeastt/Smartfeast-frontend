@@ -79,8 +79,21 @@ export default function UserOrders() {
     }
   };
 
-  const getStatusLabel = (status) => {
-    return status.charAt(0).toUpperCase() + status.slice(1);
+  const getStatusLabel = (status, orderType) => {
+    // Import utility function dynamically or inline the logic
+    if (status === 'ready') {
+      if (orderType === 'delivery') {
+        return 'Out for Delivery';
+      } else if (orderType === 'dine_in') {
+        return 'Started Preparing';
+      } else if (orderType === 'takeaway') {
+        return 'Package Packed';
+      }
+    }
+    if (status === 'out_for_delivery') {
+      return 'Out for Delivery';
+    }
+    return status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ');
   };
 
   // Filter orders by active tab (moved after helper functions)
@@ -168,7 +181,7 @@ export default function UserOrders() {
                       {getStatusIcon(order.status)}
                       <span className="font-medium text-gray-900">Order #{order.orderNumber}</span>
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
-                        {getStatusLabel(order.status)}
+                        {getStatusLabel(order.status, order.orderType)}
                       </span>
                     </div>
                     <h3 className="text-lg font-semibold text-gray-900">

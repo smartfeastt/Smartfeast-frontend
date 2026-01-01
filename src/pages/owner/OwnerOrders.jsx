@@ -15,6 +15,7 @@ import { useAppSelector, useAppDispatch } from "../../store/hooks.js";
 import { fetchOutletOrders, updateOrderStatus } from "../../store/slices/ordersSlice.js";
 import { useVendorSync } from "../../hooks/useVendorSync.js";
 import DynamicHeader from "../../components/headers/DynamicHeader.jsx";
+import { getOrderStatusLabel, getNextStatusAction } from "../../utils/orderStatus.js";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -252,27 +253,6 @@ export default function OwnerOrders() {
     }
   };
 
-  const getNextStatus = (currentStatus) => {
-    switch (currentStatus) {
-      case "preparing":
-        return "ready";
-      case "ready":
-        return "delivered";
-      default:
-        return null;
-    }
-  };
-
-  const getNextStatusLabel = (currentStatus) => {
-    switch (currentStatus) {
-      case "preparing":
-        return "Mark Ready";
-      case "ready":
-        return "Mark Delivered";
-      default:
-        return null;
-    }
-  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -454,7 +434,7 @@ export default function OwnerOrders() {
                   
                   <div className="flex items-center gap-3">
                     <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(order.status)}`}>
-                      {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                      {getOrderStatusLabel(order.status, order.orderType)}
                     </span>
                     <span className={`px-3 py-1 rounded-full text-sm font-medium ${
                       order.orderType === 'dine_in' 
@@ -559,14 +539,20 @@ export default function OwnerOrders() {
                         >
                           Cancel
                         </button>
-                        {getNextStatus(order.status) && (
-                          <button
-                            onClick={() => updateOrderStatus(order.id, getNextStatus(order.status))}
-                            className="px-3 py-1 text-sm bg-black text-white rounded hover:bg-gray-800 transition-colors"
-                          >
-                            {getNextStatusLabel(order.status)}
-                          </button>
-                        )}
+                        {(() => {
+                          const nextAction = getNextStatusAction(order.status, order.orderType);
+                          if (nextAction) {
+                            return (
+                              <button
+                                onClick={() => updateOrderStatus(order.id, nextAction.nextStatus)}
+                                className="px-3 py-1 text-sm bg-black text-white rounded hover:bg-gray-800 transition-colors"
+                              >
+                                {nextAction.label}
+                              </button>
+                            );
+                          }
+                          return null;
+                        })()}
                       </>
                     )}
                   </div>
