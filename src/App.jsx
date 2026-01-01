@@ -15,6 +15,8 @@ import Checkout from "./pages/Checkout.jsx";
 import Payment from "./pages/Payment.jsx";
 import PaymentVerify from "./pages/PaymentVerify.jsx";
 import SuccessPayment from "./pages/SuccessPayment.jsx";
+import KOT from "./pages/KOT.jsx";
+import Bill from "./pages/Bill.jsx";
 import UserSignIn from "./pages/user/UserSignIn.jsx";
 import UserSignUp from "./pages/user/UserSignUp.jsx";
 import UserProfile from "./pages/user/UserProfile.jsx";
@@ -82,6 +84,8 @@ export default function App() {
             <Route path="/payment" element={<Payment />} />
             <Route path="/payment/verify/:orderId" element={<PaymentVerify />} />
             <Route path="/payment/success" element={<SuccessPayment />} />
+            <Route path="/kot/:orderId" element={<KOT />} />
+            <Route path="/bill/:orderId" element={<Bill />} />
             
             {/* User Routes */}
             <Route path="/user/profile" element={<UserProfile />} />

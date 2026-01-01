@@ -44,6 +44,7 @@ export default function Payment() {
         paymentType: orderData.paymentType || 'pay_now',
         customerInfo: paymentData.customerInfo,
         orderType: orderData.orderType, // Include order type
+        tableNumber: orderData.tableNumber || null, // Table number for dine-in orders
         token: token || null, // Token is optional for guest orders
       };
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useAppSelector, useAppDispatch } from "../store/hooks.js";
 import { selectCartItems, selectTotalPrice, clearCart } from "../store/slices/cartSlice.js";
 import { Link, useNavigate, useLocation } from "react-router-dom";
@@ -31,11 +31,20 @@ export default function Checkout() {
     }
   }, [selectedItemIdsFromState, allCartItems]);
 
-  // Filter to only selected items
-  const cartItems = allCartItems.filter(item => selectedItems.has(item._id));
+  // Filter to only selected items (memoized to prevent infinite loops)
+  const cartItems = useMemo(() => {
+    return allCartItems.filter(item => selectedItems.has(item._id));
+  }, [allCartItems, selectedItems]);
   
   // Calculate total for selected items only
-  const totalPrice = cartItems.reduce((total, item) => total + (item.itemPrice * item.quantity), 0);
+  const totalPrice = useMemo(() => {
+    return cartItems.reduce((total, item) => total + (item.itemPrice * item.quantity), 0);
+  }, [cartItems]);
+  
+  // Get outletId from cart items (memoized)
+  const outletId = useMemo(() => {
+    return cartItems.length > 0 ? cartItems[0]?.outletId : null;
+  }, [cartItems]);
   
   const [customerInfo, setCustomerInfo] = useState({
     name: user?.name || "",
@@ -47,36 +56,45 @@ export default function Checkout() {
   const [paymentMethod, setPaymentMethod] = useState("card");
   const [paymentType, setPaymentType] = useState("pay_now"); // pay_now or pay_later
   const [orderType, setOrderType] = useState(""); // Required field
+  const [tableNumber, setTableNumber] = useState(""); // Table number for dine-in orders
   const [outletData, setOutletData] = useState(null);
   const [loadingOutlet, setLoadingOutlet] = useState(true);
+  const fetchedOutletIdRef = useRef(null);
 
-  // Fetch outlet data to check delivery settings
+  // Fetch outlet data to check delivery settings (only when outletId changes)
   useEffect(() => {
     const fetchOutletData = async () => {
-      if (cartItems.length > 0) {
-        const outletId = cartItems[0]?.outletId;
-        if (outletId) {
-          try {
-            setLoadingOutlet(true);
-            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/outlet/${outletId}`);
-            const data = await response.json();
-            if (data.success) {
-              setOutletData(data.outlet);
-              // If delivery is disabled and user had selected delivery, reset to empty
-              if (!data.outlet.deliveryEnabled && orderType === "delivery") {
-                setOrderType("");
-              }
-            }
-          } catch (error) {
-            console.error("Error fetching outlet data:", error);
-          } finally {
-            setLoadingOutlet(false);
-          }
+      if (!outletId || fetchedOutletIdRef.current === outletId) {
+        // Already fetched for this outlet or no outlet ID
+        if (!outletId) {
+          setLoadingOutlet(false);
         }
+        return;
+      }
+
+      try {
+        setLoadingOutlet(true);
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/outlet/${outletId}`);
+        const data = await response.json();
+        if (data.success) {
+          setOutletData(data.outlet);
+          fetchedOutletIdRef.current = outletId;
+        }
+      } catch (error) {
+        console.error("Error fetching outlet data:", error);
+      } finally {
+        setLoadingOutlet(false);
       }
     };
     fetchOutletData();
-  }, [cartItems, orderType]);
+  }, [outletId]);
+
+  // Reset orderType if delivery is disabled and user selected delivery
+  useEffect(() => {
+    if (!outletData?.deliveryEnabled && orderType === "delivery") {
+      setOrderType("");
+    }
+  }, [outletData, orderType]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -113,14 +131,26 @@ export default function Checkout() {
     }
 
     // Validate required fields
-    if (!customerInfo.name || !customerInfo.email || !customerInfo.phone || !customerInfo.address) {
-      alert("Please fill in all required fields (Name, Email, Phone, and Address)");
+    if (!customerInfo.name || !customerInfo.email || !customerInfo.phone) {
+      alert("Please fill in all required fields (Name, Email, and Phone)");
+      return;
+    }
+
+    // Validate delivery address only if delivery is selected
+    if (orderType === "delivery" && !customerInfo.address) {
+      alert("Please enter a delivery address");
       return;
     }
 
     // Validate order type
     if (!orderType) {
       alert("Please select an order type (Dine-In, Takeaway, or Delivery)");
+      return;
+    }
+
+    // Validate table number for dine-in orders
+    if (orderType === "dine_in" && !tableNumber.trim()) {
+      alert("Please enter a table number for dine-in orders");
       return;
     }
 
@@ -152,10 +182,11 @@ export default function Checkout() {
         outletId: item.outletId || outletId,
       })),
       totalPrice: finalTotal,
-      deliveryAddress: customerInfo.address,
+      deliveryAddress: orderType === "delivery" ? customerInfo.address : "N/A",
       paymentMethod: paymentMethod,
       paymentType: paymentType,
       orderType: orderType,
+      tableNumber: orderType === "dine_in" ? tableNumber.trim() : null,
     };
 
     const paymentData = {
@@ -311,21 +342,6 @@ export default function Checkout() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black focus:border-black"
                 />
               </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
-                  <MapPin size={16} />
-                  Delivery Address *
-                </label>
-                <textarea
-                  name="address"
-                  value={customerInfo.address}
-                  onChange={handleInputChange}
-                  required
-                  rows="3"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black focus:border-black"
-                />
-              </div>
 
               {/* Order Type */}
               <div>
@@ -339,7 +355,12 @@ export default function Checkout() {
                       name="orderType"
                       value="dine_in"
                       checked={orderType === "dine_in"}
-                      onChange={(e) => setOrderType(e.target.value)}
+                      onChange={(e) => {
+                        setOrderType(e.target.value);
+                        if (e.target.value !== "dine_in") {
+                          setTableNumber(""); // Clear table number if not dine-in
+                        }
+                      }}
                       className="mr-2"
                       required
                     />
@@ -351,7 +372,12 @@ export default function Checkout() {
                       name="orderType"
                       value="takeaway"
                       checked={orderType === "takeaway"}
-                      onChange={(e) => setOrderType(e.target.value)}
+                      onChange={(e) => {
+                        setOrderType(e.target.value);
+                        if (e.target.value !== "dine_in") {
+                          setTableNumber(""); // Clear table number if not dine-in
+                        }
+                      }}
                       className="mr-2"
                       required
                     />
@@ -363,7 +389,12 @@ export default function Checkout() {
                       name="orderType"
                       value="delivery"
                       checked={orderType === "delivery"}
-                      onChange={(e) => setOrderType(e.target.value)}
+                      onChange={(e) => {
+                        setOrderType(e.target.value);
+                        if (e.target.value !== "dine_in") {
+                          setTableNumber(""); // Clear table number if not dine-in
+                        }
+                      }}
                       className="mr-2"
                       disabled={!outletData?.deliveryEnabled}
                       required
@@ -376,7 +407,43 @@ export default function Checkout() {
                     </span>
                   </label>
                 </div>
+                
+                {/* Table Number Input (only for Dine-In) */}
+                {orderType === "dine_in" && (
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Table Number *
+                    </label>
+                    <input
+                      type="text"
+                      value={tableNumber}
+                      onChange={(e) => setTableNumber(e.target.value)}
+                      placeholder="Enter table number"
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black focus:border-black"
+                    />
+                  </div>
+                )}
               </div>
+
+              {/* Delivery Address (only for Delivery orders) */}
+              {orderType === "delivery" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                    <MapPin size={16} />
+                    Delivery Address *
+                  </label>
+                  <textarea
+                    name="address"
+                    value={customerInfo.address}
+                    onChange={handleInputChange}
+                    required
+                    rows="3"
+                    placeholder="Enter your delivery address"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black focus:border-black"
+                  />
+                </div>
+              )}
 
               {/* Payment Type */}
               <div>

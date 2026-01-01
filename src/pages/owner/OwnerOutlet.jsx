@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAppSelector, useAppDispatch } from '../../store/hooks.js'
 import { fetchOutletOrders, updateOrderStatus, addOrUpdateOutletOrder } from '../../store/slices/ordersSlice.js'
-import { Plus, Users, ArrowLeft, UserPlus, X, Package, Clock, CheckCircle, Truck } from 'react-feather'
+import { Plus, Users, ArrowLeft, UserPlus, X, Package, Clock, CheckCircle, Truck, Printer, FileText } from 'react-feather'
 import DynamicHeader from '../../components/headers/DynamicHeader.jsx'
 import io from 'socket.io-client'
 import { getOrderStatusLabel, getNextStatusAction } from '../../utils/orderStatus.js'
@@ -23,13 +23,63 @@ export default function OwnerOutlet() {
   const [managerPassword, setManagerPassword] = useState('')
   const [updatingDelivery, setUpdatingDelivery] = useState(false)
 
+  const fetchOutlet = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/outlet/${outletId}`,{
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,  // ✅ include token here
+        },
+      });
+      const data = await response.json()
+      if (data.success) {
+        setOutlet(data.outlet)
+        // Debug: Log managers to check if they're populated
+        if (data.outlet?.managers) {
+          console.log('Outlet managers data:', JSON.stringify(data.outlet.managers, null, 2))
+        }
+      } else {
+        console.error('Failed to fetch outlet:', data.message)
+      }
+    } catch (error) {
+      console.error('Error fetching outlet:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [outletId, token])
+
+  const fetchItems = useCallback(async () => {
+    if (!token || !outletId) return;
+    
+    try {
+      const response = await fetch(`${API_URL}/api/item/outlet/${outletId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,  // ✅ include token here
+        },
+      })
+      
+      const data = await response.json()
+      if (data.success) {
+        setItems(data.items || [])
+      } else {
+        console.error('Failed to fetch items:', data.message)
+        setItems([])
+      }
+    } catch (error) {
+      console.error('Error fetching items:', error)
+      setItems([])
+    }
+  }, [outletId, token])
+
   useEffect(() => {
+    if (!token || !outletId) return;
     fetchOutlet()
     fetchItems()
-    if (token && outletId) {
-      dispatch(fetchOutletOrders({ outletId, token }))
-    }
-  }, [outletId, token, dispatch])
+    dispatch(fetchOutletOrders({ outletId, token }))
+  }, [outletId, token, dispatch, fetchOutlet, fetchItems])
 
   // Socket.io for real-time order updates
   useEffect(() => {
@@ -107,57 +157,6 @@ export default function OwnerOutlet() {
       socket.disconnect();
     };
   }, [outletId, token, dispatch])
-
-  const fetchOutlet = async () => {
-    try {
-      const response = await fetch(`${API_URL}/api/outlet/${outletId}`,{
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,  // ✅ include token here
-        },
-      });
-      const data = await response.json()
-      if (data.success) {
-        setOutlet(data.outlet)
-        // Debug: Log managers to check if they're populated
-        if (data.outlet?.managers) {
-          console.log('Outlet managers data:', JSON.stringify(data.outlet.managers, null, 2))
-        }
-      } else {
-        console.error('Failed to fetch outlet:', data.message)
-      }
-    } catch (error) {
-      console.error('Error fetching outlet:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fetchItems = async () => {
-    if (!token || !outletId) return;
-    
-    try {
-      const response = await fetch(`${API_URL}/api/item/outlet/${outletId}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,  // ✅ include token here
-        },
-      })
-      
-      const data = await response.json()
-      if (data.success) {
-        setItems(data.items || [])
-      } else {
-        console.error('Failed to fetch items:', data.message)
-        setItems([])
-      }
-    } catch (error) {
-      console.error('Error fetching items:', error)
-      setItems([])
-    }
-  }
 
 
   const handleAssignManager = async (e) => {
@@ -244,6 +243,62 @@ export default function OwnerOutlet() {
       setUpdatingDelivery(false);
     }
   }
+
+  const handleGenerateKOT = async (orderId, itemIds = null) => {
+    try {
+      const response = await fetch(`${API_URL}/api/order/${orderId}/kot/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          itemIds: itemIds, // Optional: specific item IDs, or null for all unprepared items
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        // Open KOT in new window for printing
+        window.open(`/kot/${orderId}`, '_blank');
+        // Refresh orders to update KOT status
+        dispatch(fetchOutletOrders({ outletId, token }));
+      } else {
+        alert(data.message || 'Failed to generate KOT');
+      }
+    } catch (error) {
+      console.error('Error generating KOT:', error);
+      alert('Failed to generate KOT');
+    }
+  };
+
+  const handleGenerateBill = (orderId) => {
+    window.open(`/bill/${orderId}`, '_blank');
+  };
+
+  // Helper function to check if item has KOT prepared
+  const isItemKOTPrepared = (order, item) => {
+    if (!order.kotItems || !order.kotItems.length) return false;
+    const kotItem = order.kotItems.find(kot => 
+      (kot.itemId?.toString() === item.itemId?.toString() || kot.itemId?.toString() === item._id?.toString()) &&
+      kot.itemName === item.itemName &&
+      kot.kotGenerated === true
+    );
+    return !!kotItem;
+  };
+
+  // Helper function to get unprepared items for an order
+  const getUnpreparedItems = (order) => {
+    if (!order.kotItems || !order.kotItems.length) return order.items || [];
+    const unpreparedKotItems = order.kotItems.filter(kot => !kot.kotGenerated);
+    // Match with order items
+    return (order.items || []).filter(item => {
+      return unpreparedKotItems.some(kot => 
+        (kot.itemId?.toString() === item.itemId?.toString() || kot.itemId?.toString() === item._id?.toString()) &&
+        kot.itemName === item.itemName
+      );
+    });
+  };
 
 
   if (loading) {
@@ -440,24 +495,44 @@ export default function OwnerOutlet() {
                       <p className="text-xs text-gray-500">
                         {new Date(order.createdAt).toLocaleString()}
                       </p>
+                      {order.tableNumber && (
+                        <p className="text-xs font-semibold text-blue-600 mt-1">
+                          Table #{order.tableNumber}
+                        </p>
+                      )}
                     </div>
                     <div className="text-right">
                       <p className="font-bold text-lg">₹{order.totalPrice.toFixed(2)}</p>
                       <p className="text-xs text-gray-500">{order.paymentMethod}</p>
+                      {order.paymentType && (
+                        <p className="text-xs text-gray-500 capitalize">
+                          {order.paymentType.replace('_', ' ')}
+                        </p>
+                      )}
                     </div>
                   </div>
 
                   <div className="border-t pt-3 mb-3">
                     <p className="text-sm font-medium mb-2">Items:</p>
                     <div className="space-y-1">
-                      {order.items.map((item, idx) => (
-                        <div key={idx} className="flex justify-between text-sm text-gray-600">
-                          <span>
-                            {item.itemName} x {item.quantity}
-                          </span>
-                          <span>₹{(item.itemPrice * item.quantity).toFixed(2)}</span>
-                        </div>
-                      ))}
+                      {order.items.map((item, idx) => {
+                        const isKOTPrepared = isItemKOTPrepared(order, item);
+                        return (
+                          <div key={idx} className="flex justify-between items-center text-sm">
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-600">
+                                {item.itemName} x {item.quantity}
+                              </span>
+                              {isKOTPrepared && (
+                                <span className="text-xs px-2 py-0.5 bg-green-100 text-green-800 rounded-full">
+                                  KOT Prepared
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-gray-600">₹{(item.itemPrice * item.quantity).toFixed(2)}</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -465,6 +540,27 @@ export default function OwnerOutlet() {
                     <p className="text-sm text-gray-600 mb-2">
                       <strong>Delivery:</strong> {order.deliveryAddress}
                     </p>
+                    {/* KOT and Bill Actions */}
+                    <div className="flex gap-2 mb-2 flex-wrap">
+                      {getUnpreparedItems(order).length > 0 && (
+                        <button
+                          onClick={() => handleGenerateKOT(order._id)}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                          title="Generate KOT for unprepared items"
+                        >
+                          <Printer size={14} />
+                          Generate KOT ({getUnpreparedItems(order).length})
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleGenerateBill(order._id)}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                        title="Generate Bill"
+                      >
+                        <FileText size={14} />
+                        Generate Bill
+                      </button>
+                    </div>
                     <div className="flex gap-2">
                       {(() => {
                         const nextAction = getNextStatusAction(order.status, order.orderType);
