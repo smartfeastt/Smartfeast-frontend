@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Package, Clock, CheckCircle, XCircle, Star, RotateCcw } from "lucide-react";
+import { Package, Clock, CheckCircle, XCircle, Star, RotateCcw, Filter } from "lucide-react";
 import { useAppSelector, useAppDispatch } from "../../store/hooks.js";
 import { fetchUserOrders, selectUserOrders, selectOrdersLoading } from "../../store/slices/ordersSlice.js";
 import DynamicHeader from "../../components/headers/DynamicHeader.jsx";
@@ -12,7 +12,10 @@ export default function UserOrders() {
   const orders = useAppSelector(selectUserOrders);
   const loading = useAppSelector(selectOrdersLoading);
   const dispatch = useAppDispatch();
-  const [activeTab, setActiveTab] = useState("all");
+  const [filters, setFilters] = useState({
+    status: 'active', // active, completed
+    dateRange: 'today', // today, week, month, all
+  });
 
   useEffect(() => {
     if (token) {
@@ -96,12 +99,40 @@ export default function UserOrders() {
     return status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ');
   };
 
-  // Filter orders by active tab
+  // Helper to check if order is completed
+  const isOrderCompleted = (order) => {
+    return order.status === 'delivered' || order.status === 'cancelled';
+  }
+
+  // Filter orders based on filters
   const filteredOrders = orders.filter(order => {
-    if (activeTab === "all") return true;
-    if (activeTab === "pay_now") return order.paymentType === 'pay_now';
-    if (activeTab === "pay_later") return order.paymentType === 'pay_later';
-    return order.status === activeTab;
+    // Status filter (active vs completed)
+    if (filters.status === 'active') {
+      const activeStatuses = ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery'];
+      if (!activeStatuses.includes(order.status)) return false;
+    } else {
+      // completed
+      const completedStatuses = ['delivered', 'cancelled'];
+      if (!completedStatuses.includes(order.status)) return false;
+    }
+
+    // Date range filter
+    const orderDate = new Date(order.createdAt);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    if (filters.dateRange === 'today') {
+      if (orderDate < today) return false;
+    } else if (filters.dateRange === 'week') {
+      const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+      if (orderDate < weekAgo) return false;
+    } else if (filters.dateRange === 'month') {
+      const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+      if (orderDate < monthAgo) return false;
+    }
+    // 'all' doesn't filter by date
+
+    return true;
   });
 
   const handleReorder = async (order) => {
@@ -111,82 +142,68 @@ export default function UserOrders() {
         return;
       }
 
-      // Check if order allows reordering (not cancelled, not delivered long ago, etc.)
+      // Check if order allows reordering (not cancelled, not delivered long ago)
       if (order.status === 'cancelled') {
         alert('Cannot reorder a cancelled order');
         return;
       }
 
-      // If parent order is Pay Later, add items directly to that order
-      if (order.paymentType === 'pay_later') {
-        const confirmed = window.confirm(
-          `This order was "Pay Later". Adding items will be added directly to Order #${order.orderNumber}. Continue?`
-        );
+      // Check if order is from the same outlet (can only reorder from same outlet)
+      const outletId = order.outletId?._id || order.outletId;
+      if (!outletId) {
+        alert('Cannot determine outlet for this order');
+        return;
+      }
+
+      // Confirm with user
+      const confirmed = window.confirm(
+        `Add items from Order #${order.orderNumber} to the same order? The items will be added to your existing order.`
+      );
+      
+      if (!confirmed) return;
+
+      // Prepare items for the API
+      const itemsToAdd = order.items.map(item => ({
+        itemId: item.itemId?._id || item.itemId || item._id,
+        itemName: item.itemName,
+        itemPrice: item.itemPrice,
+        quantity: item.quantity,
+        itemPhoto: item.itemPhoto,
+      })).filter(item => item.itemId); // Filter out items without valid itemId
+
+      if (itemsToAdd.length === 0) {
+        alert('No valid items to add');
+        return;
+      }
+
+      // Call API to add items to existing order
+      const response = await fetch(`${API_URL}/api/order/${order._id}/add-items`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          items: itemsToAdd,
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        // Refresh orders to show updated order
+        dispatch(fetchUserOrders(token));
         
-        if (!confirmed) return;
-
-        const response = await fetch(`${API_URL}/api/order/${order._id}/add-items`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            items: order.items.map(item => ({
-              itemId: item.itemId || item._id,
-              itemName: item.itemName,
-              itemPrice: item.itemPrice,
-              quantity: item.quantity,
-              itemPhoto: item.itemPhoto,
-            })),
-          }),
-        });
-
-        const data = await response.json();
-        if (data.success) {
-          alert(`Items added to Order #${order.orderNumber} successfully!`);
-          dispatch(fetchUserOrders(token)); // Refresh orders
+        if (data.requiresPayment) {
+          // If Pay Now order, need to pay for new items
+          alert(`Items added to Order #${order.orderNumber} successfully! You need to pay ₹${data.newItemsTotal.toFixed(2)} for the new items.`);
+          // TODO: Navigate to payment page for new items amount
         } else {
-          alert(data.message || 'Failed to add items to order');
+          // Pay Later - items added directly
+          alert(`Items added to Order #${order.orderNumber} successfully!`);
         }
       } else {
-        // Pay Now: require payment for new items
-        // For now, we'll add items to the order and redirect to payment
-        const confirmed = window.confirm(
-          `This order was "Pay Now". You will need to pay for the reordered items. Continue?`
-        );
-        
-        if (!confirmed) return;
-
-        const response = await fetch(`${API_URL}/api/order/${order._id}/add-items`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            items: order.items.map(item => ({
-              itemId: item.itemId || item._id,
-              itemName: item.itemName,
-              itemPrice: item.itemPrice,
-              quantity: item.quantity,
-              itemPhoto: item.itemPhoto,
-            })),
-          }),
-        });
-
-        const data = await response.json();
-        if (data.success && data.requiresPayment) {
-          // Redirect to payment for the new items
-          alert(`Items added. You need to pay ₹${data.newItemsTotal.toFixed(2)} for the new items.`);
-          // TODO: Navigate to payment page for new items amount
-          dispatch(fetchUserOrders(token)); // Refresh orders
-        } else if (data.success) {
-          alert(`Items added to Order #${order.orderNumber} successfully!`);
-          dispatch(fetchUserOrders(token)); // Refresh orders
-        } else {
-          alert(data.message || 'Failed to add items to order');
-        }
+        alert(data.message || 'Failed to add items to order');
       }
     } catch (error) {
       console.error('Error reordering:', error);
@@ -217,35 +234,55 @@ export default function UserOrders() {
       <div className="max-w-6xl mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-8">My Orders</h1>
 
-        {/* Tabs */}
-        <div className="bg-white rounded-lg shadow mb-6">
-          <div className="border-b border-gray-200">
-            <nav className="flex space-x-8 px-6 overflow-x-auto">
-              {[
-                { key: "all", label: "All Orders", count: orders.length },
-                { key: "pay_now", label: "Pay Now", count: orders.filter(o => o.paymentType === 'pay_now').length },
-                { key: "pay_later", label: "Pay Later", count: orders.filter(o => o.paymentType === 'pay_later').length },
-                { key: "pending", label: "Pending", count: orders.filter(o => o.status === "pending").length },
-                { key: "confirmed", label: "Confirmed", count: orders.filter(o => o.status === "confirmed").length },
-                { key: "preparing", label: "Preparing", count: orders.filter(o => o.status === "preparing").length },
-                { key: "ready", label: "Ready", count: orders.filter(o => o.status === "ready").length },
-                { key: "out_for_delivery", label: "Out for Delivery", count: orders.filter(o => o.status === "out_for_delivery").length },
-                { key: "delivered", label: "Delivered", count: orders.filter(o => o.status === "delivered").length },
-                { key: "cancelled", label: "Cancelled", count: orders.filter(o => o.status === "cancelled").length }
-              ].map((tab) => (
+        {/* Filters */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-4">
+            <Filter size={16} />
+            Filters
+          </div>
+          
+          <div className="flex flex-wrap items-end gap-4">
+            {/* Order Status Filter - Horizontal Buttons */}
+            <div className="flex-shrink-0">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Order Status</label>
+              <div className="flex items-center gap-2">
                 <button
-                  key={tab.key}
-                  onClick={() => setActiveTab(tab.key)}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === tab.key
-                      ? "border-black text-black"
-                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  onClick={() => setFilters(prev => ({ ...prev, status: "active" }))}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    filters.status === "active"
+                      ? "bg-black text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                   }`}
                 >
-                  {tab.label} ({tab.count})
+                  Active
                 </button>
-              ))}
-            </nav>
+                <button
+                  onClick={() => setFilters(prev => ({ ...prev, status: "completed" }))}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    filters.status === "completed"
+                      ? "bg-black text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  Completed
+                </button>
+              </div>
+            </div>
+
+            {/* Date Range Filter - Dropdown */}
+            <div className="flex-shrink-0">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Date Range</label>
+              <select
+                value={filters.dateRange}
+                onChange={(e) => setFilters(prev => ({ ...prev, dateRange: e.target.value }))}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black"
+              >
+                <option value="today">Today</option>
+                <option value="week">This Week</option>
+                <option value="month">This Month</option>
+                <option value="all">All Time</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -256,9 +293,9 @@ export default function UserOrders() {
               <Package size={48} className="mx-auto text-gray-300 mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No orders found</h3>
               <p className="text-gray-500">
-                {activeTab === "all" 
-                  ? "You haven't placed any orders yet." 
-                  : `No ${activeTab} orders found.`}
+                {filters.status === "active"
+                  ? "You don't have any active orders."
+                  : "You don't have any completed orders."}
               </p>
             </div>
           ) : (

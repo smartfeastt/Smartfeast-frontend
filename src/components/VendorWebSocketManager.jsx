@@ -11,6 +11,23 @@ import { connected, disconnected, reconnecting } from '../store/slices/socketSli
 const API_URL = import.meta.env.VITE_API_URL;
 
 /**
+ * Get socket.io base URL from API_URL
+ * Removes /api suffix if present and converts http/https to ws/wss
+ */
+const getSocketUrl = () => {
+  let baseUrl = API_URL;
+  
+  // Remove /api suffix if present
+  if (baseUrl.endsWith('/api')) {
+    baseUrl = baseUrl.slice(0, -4);
+  }
+  
+  // Convert http/https to ws/wss for socket.io
+  // Socket.io handles this automatically, but we need the base URL
+  return baseUrl;
+};
+
+/**
  * WebSocket Manager Component for Vendor Dashboard
  * Handles:
  * - Auto-reconnection
@@ -48,9 +65,12 @@ export default function VendorWebSocketManager() {
       return;
     }
 
+    // Get correct socket URL
+    const socketUrl = getSocketUrl();
+    
     // Initialize socket with auto-reconnection
-    const socket = io(API_URL, {
-      transports: ['websocket'],
+    const socket = io(socketUrl, {
+      transports: ['websocket', 'polling'], // Allow fallback to polling
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,

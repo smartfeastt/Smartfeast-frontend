@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAppSelector, useAppDispatch } from '../../store/hooks.js'
-import { fetchOutletOrders, updateOrderStatus, addOrUpdateOutletOrder } from '../../store/slices/ordersSlice.js'
-import { Plus, Users, ArrowLeft, UserPlus, X, Package, Clock, CheckCircle, Truck, Printer, FileText } from 'react-feather'
+import { fetchOutletOrders, updateOrderStatus, addOrUpdateOutletOrder, setCurrentOutlet } from '../../store/slices/ordersSlice.js'
+import { Plus, Users, ArrowLeft, UserPlus, X, Package, Clock, CheckCircle, Truck, Printer, FileText, Settings, CreditCard, Filter } from 'react-feather'
 import DynamicHeader from '../../components/headers/DynamicHeader.jsx'
 import io from 'socket.io-client'
 import { getOrderStatusLabel, getNextStatusAction } from '../../utils/orderStatus.js'
@@ -22,6 +22,14 @@ export default function OwnerOutlet() {
   const [managerEmail, setManagerEmail] = useState('')
   const [managerPassword, setManagerPassword] = useState('')
   const [updatingDelivery, setUpdatingDelivery] = useState(false)
+  const [updatingPayNow, setUpdatingPayNow] = useState(false)
+  const [updatingPayLater, setUpdatingPayLater] = useState(false)
+  const [orderFilters, setOrderFilters] = useState({
+    paymentType: 'pay_later', // pay_now, pay_later
+    dateRange: 'today', // today, week, month, all
+    status: 'active', // active, completed
+    orderType: 'dine_in', // dine_in, takeaway, delivery (no 'all')
+  })
 
   const fetchOutlet = useCallback(async () => {
     try {
@@ -76,17 +84,55 @@ export default function OwnerOutlet() {
 
   useEffect(() => {
     if (!token || !outletId) return;
+    
+    // Set current outlet in Redux to load cached orders
+    dispatch(setCurrentOutlet(outletId));
+    
+    // Fetch fresh data
     fetchOutlet()
     fetchItems()
-    dispatch(fetchOutletOrders({ outletId, token }))
+    
+    // Fetch orders with retry logic
+    const fetchOrdersWithRetry = async (retries = 3) => {
+      try {
+        await dispatch(fetchOutletOrders({ outletId, token })).unwrap();
+      } catch (error) {
+        console.error('Error fetching orders:', error);
+        if (retries > 0) {
+          console.log(`Retrying... ${retries} attempts left`);
+          setTimeout(() => fetchOrdersWithRetry(retries - 1), 1000);
+        }
+      }
+    };
+    
+    fetchOrdersWithRetry();
+    
+    // Set up periodic refresh (every 30 seconds)
+    const refreshInterval = setInterval(() => {
+      if (token && outletId) {
+        dispatch(fetchOutletOrders({ outletId, token }));
+      }
+    }, 30000);
+    
+    return () => clearInterval(refreshInterval);
   }, [outletId, token, dispatch, fetchOutlet, fetchItems])
 
   // Socket.io for real-time order updates
   useEffect(() => {
     if (!token || !outletId) return;
 
-    const socket = io(API_URL, {
-      transports: ['websocket'],
+    // Get correct socket URL (remove /api suffix if present)
+    let socketUrl = API_URL;
+    if (socketUrl.endsWith('/api')) {
+      socketUrl = socketUrl.slice(0, -4);
+    }
+
+    const socket = io(socketUrl, {
+      transports: ['websocket', 'polling'], // Allow fallback to polling
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: Infinity,
     });
 
     socket.on('connect', () => {
@@ -149,7 +195,17 @@ export default function OwnerOutlet() {
     });
 
     socket.on('connect_error', (error) => {
-      console.error('[OwnerOutlet] Socket connection error:', error);
+      // Only log if it's not a normal disconnection
+      if (error.message && !error.message.includes('xhr poll error')) {
+        console.error('[OwnerOutlet] Socket connection error:', error.message);
+      }
+    });
+
+    socket.on('disconnect', (reason) => {
+      // Only log if it's not a normal client disconnect
+      if (reason !== 'io client disconnect') {
+        console.log('[OwnerOutlet] Socket disconnected:', reason);
+      }
     });
 
     return () => {
@@ -244,6 +300,118 @@ export default function OwnerOutlet() {
     }
   }
 
+  const handleTogglePayNow = async () => {
+    try {
+      setUpdatingPayNow(true);
+      const response = await fetch(`${API_URL}/api/outlet/update/${outletId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          token,
+          payNowEnabled: !(outlet.payNowEnabled ?? true),
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setOutlet(data.outlet);
+      } else {
+        alert(data.message || 'Failed to update payment settings');
+      }
+    } catch (error) {
+      console.error('Error updating payment settings:', error);
+      alert('Failed to update payment settings');
+    } finally {
+      setUpdatingPayNow(false);
+    }
+  }
+
+  const handleTogglePayLater = async () => {
+    try {
+      setUpdatingPayLater(true);
+      const response = await fetch(`${API_URL}/api/outlet/update/${outletId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          token,
+          payLaterEnabled: !(outlet.payLaterEnabled ?? true),
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setOutlet(data.outlet);
+      } else {
+        alert(data.message || 'Failed to update payment settings');
+      }
+    } catch (error) {
+      console.error('Error updating payment settings:', error);
+      alert('Failed to update payment settings');
+    } finally {
+      setUpdatingPayLater(false);
+    }
+  }
+
+  // Filter orders based on filters
+  const filteredOrders = outletOrders.filter(order => {
+    // Payment type filter
+    if (order.paymentType !== orderFilters.paymentType) {
+      return false;
+    }
+
+    // Order type filter
+    if (order.orderType !== orderFilters.orderType) {
+      return false;
+    }
+
+    // Date range filter
+    const orderDate = new Date(order.createdAt);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    if (orderFilters.dateRange === 'today') {
+      if (orderDate < today) return false;
+    } else if (orderFilters.dateRange === 'week') {
+      const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+      if (orderDate < weekAgo) return false;
+    } else if (orderFilters.dateRange === 'month') {
+      const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+      if (orderDate < monthAgo) return false;
+    }
+    // 'all' doesn't filter by date
+
+    // Status filter (active vs completed)
+    if (orderFilters.status === 'active') {
+      const activeStatuses = ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery'];
+      if (!activeStatuses.includes(order.status)) return false;
+    } else {
+      // completed
+      const completedStatuses = ['delivered', 'cancelled'];
+      if (!completedStatuses.includes(order.status)) return false;
+    }
+
+    return true;
+  })
+
+  // Helper to check if order is completed
+  const isOrderCompleted = (order) => {
+    return order.status === 'delivered' || order.status === 'cancelled';
+  }
+
+  // Helper to get simplified status for dine-in orders
+  const getSimplifiedStatus = (order) => {
+    if (order.orderType === 'dine_in') {
+      return isOrderCompleted(order) ? 'Completed' : 'Active';
+    }
+    return getOrderStatusLabel(order.status, order.orderType);
+  }
+
   const handleGenerateKOT = async (orderId, itemIds = null) => {
     try {
       const response = await fetch(`${API_URL}/api/order/${orderId}/kot/generate`, {
@@ -313,28 +481,161 @@ export default function OwnerOutlet() {
     <div className="min-h-screen bg-gray-50">
       <DynamicHeader />
       
-      {/* Breadcrumb */}
-      <div className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 py-4">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <button
             onClick={() => navigate(`/owner/restaurant/${outlet.restaurantId?._id || outlet.restaurantId}`)}
-            className="text-sm text-gray-600 hover:text-gray-900 mb-2 inline-flex items-center gap-1"
+            className="text-sm text-gray-600 hover:text-gray-900 mb-3 inline-flex items-center gap-1 transition-colors"
           >
             <ArrowLeft size={16} />
             Back to Restaurant
           </button>
-          <h1 className="text-2xl font-bold text-gray-900">{outlet.name}</h1>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">{outlet.name}</h1>
+              <p className="text-sm text-gray-600 mt-1">{outlet.location || 'No location set'}</p>
+            </div>
+            <button
+              onClick={() => navigate(`/owner/menu/${outletId}`)}
+              className="flex items-center gap-2 px-5 py-2.5 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors shadow-sm"
+            >
+              <Plus size={18} />
+              Manage Menu
+            </button>
+          </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          {/* Quick Stats */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Menu Items</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{items.length}</p>
+              </div>
+              <Package className="text-gray-400" size={32} />
+            </div>
+          </div>
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total Orders</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{outletOrders.length}</p>
+              </div>
+              <Clock className="text-gray-400" size={32} />
+            </div>
+          </div>
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Managers</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{outlet.managers?.length || 0}</p>
+              </div>
+              <Users className="text-gray-400" size={32} />
+            </div>
+          </div>
+        </div>
+        {/* Settings Section */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="flex items-center gap-2 mb-6">
+            <Settings size={20} className="text-gray-700" />
+            <h2 className="text-xl font-bold text-gray-900">Outlet Settings</h2>
+          </div>
+          
+          <div className="space-y-4">
+            {/* Delivery Setting */}
+            <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <Truck size={18} className="text-gray-600" />
+                  <p className="font-semibold text-gray-900">Enable Delivery</p>
+                </div>
+                <p className="text-sm text-gray-600 ml-6">
+                  Allow customers to place delivery orders
+                </p>
+              </div>
+              <button
+                onClick={handleToggleDelivery}
+                disabled={updatingDelivery}
+                className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
+                  outlet.deliveryEnabled ? 'bg-black' : 'bg-gray-300'
+                } ${updatingDelivery ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                    outlet.deliveryEnabled ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Pay Now Setting */}
+            <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <CreditCard size={18} className="text-gray-600" />
+                  <p className="font-semibold text-gray-900">Enable Pay Now</p>
+                </div>
+                <p className="text-sm text-gray-600 ml-6">
+                  Allow customers to pay immediately at checkout
+                </p>
+              </div>
+              <button
+                onClick={handleTogglePayNow}
+                disabled={updatingPayNow}
+                className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
+                  (outlet.payNowEnabled ?? true) ? 'bg-black' : 'bg-gray-300'
+                } ${updatingPayNow ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                    (outlet.payNowEnabled ?? true) ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Pay Later Setting */}
+            <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <Clock size={18} className="text-gray-600" />
+                  <p className="font-semibold text-gray-900">Enable Pay Later</p>
+                </div>
+                <p className="text-sm text-gray-600 ml-6">
+                  Allow customers to pay at the restaurant or counter
+                </p>
+              </div>
+              <button
+                onClick={handleTogglePayLater}
+                disabled={updatingPayLater}
+                className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
+                  (outlet.payLaterEnabled ?? true) ? 'bg-black' : 'bg-gray-300'
+                } ${updatingPayLater ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                    (outlet.payLaterEnabled ?? true) ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Managers Section */}
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-gray-900">Managers</h2>
+            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <Users size={20} />
+              Managers
+            </h2>
             <button
               onClick={() => setShowAssignModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded hover:bg-gray-800"
+              className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors"
             >
               <UserPlus size={18} />
               Assign Manager
@@ -343,31 +644,26 @@ export default function OwnerOutlet() {
           {outlet.managers && outlet.managers.length > 0 ? (
             <div className="space-y-2">
               {outlet.managers.map((manager) => {
-                // Handle both populated and non-populated manager objects
-                // If manager is just an ID string, we can't display it properly
                 const managerId = typeof manager === 'string' ? manager : (manager._id || manager);
                 const managerName = manager?.name || (manager?.email ? manager.email.split('@')[0] : 'Unknown');
                 const managerEmail = manager?.email || '';
                 
-                // Debug log
-                console.log('Manager data:', manager, 'Name:', managerName, 'Email:', managerEmail);
-                
                 return (
                   <div
                     key={managerId}
-                    className="flex justify-between items-center p-3 bg-gray-50 rounded border border-gray-200"
+                    className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-200"
                   >
                     <div className="flex-1">
                       <p className="font-medium text-gray-900 mb-1">{managerName}</p>
                       {managerEmail ? (
-                        <p className="text-sm text-gray-900 font-normal">{managerEmail}</p>
+                        <p className="text-sm text-gray-600">{managerEmail}</p>
                       ) : (
-                        <p className="text-xs text-red-500 italic">⚠ Email not populated - check backend</p>
+                        <p className="text-xs text-red-500 italic">⚠ Email not populated</p>
                       )}
                     </div>
                     <button
                       onClick={() => handleRemoveManager(managerId)}
-                      className="text-red-600 hover:text-red-800 ml-4"
+                      className="text-red-600 hover:text-red-800 ml-4 transition-colors"
                       title="Remove manager"
                     >
                       <X size={18} />
@@ -381,74 +677,165 @@ export default function OwnerOutlet() {
           )}
         </div>
 
-        {/* Menu Items Section */}
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-gray-900">Menu Items</h2>
-            <button
-              onClick={() => navigate(`/owner/menu/${outletId}`)}
-              className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded hover:bg-gray-800"
-            >
-              <Plus size={18} />
-              Manage Menu
-            </button>
-          </div>
-          <p className="text-sm text-gray-600">{items.length} items</p>
-        </div>
-
-        {/* Delivery Settings Section */}
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-              <Truck size={20} />
-              Delivery Settings
-            </h2>
-          </div>
-          <div className="flex items-center justify-between py-3 border-b border-gray-200">
-            <div>
-              <p className="font-medium text-gray-900">Enable Delivery</p>
-              <p className="text-sm text-gray-600">
-                When disabled, customers can see the delivery option but cannot select it
-              </p>
-            </div>
-            <button
-              onClick={handleToggleDelivery}
-              disabled={updatingDelivery}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                outlet.deliveryEnabled ? 'bg-black' : 'bg-gray-200'
-              } ${updatingDelivery ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  outlet.deliveryEnabled ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
-            </button>
-          </div>
-        </div>
-
         {/* Orders Section */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex justify-between items-center mb-4">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
               <Package size={20} />
-              Orders ({outletOrders.length})
+              Orders ({filteredOrders.length})
             </h2>
+            <button
+              onClick={() => {
+                if (token && outletId) {
+                  dispatch(fetchOutletOrders({ outletId, token }));
+                }
+              }}
+              disabled={ordersLoading}
+              className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Refresh orders"
+            >
+              <Clock size={16} />
+              {ordersLoading ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
+
+          {/* Order Filters - All in One Line */}
+          <div className="mb-6">
+            <div className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-4">
+              <Filter size={16} />
+              Filters
+            </div>
+            
+            <div className="flex flex-wrap items-end gap-4">
+              {/* Order Type Filter - Horizontal Buttons */}
+              <div className="flex-shrink-0">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Order Type</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setOrderFilters(prev => ({ ...prev, orderType: "dine_in" }))}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      orderFilters.orderType === "dine_in"
+                        ? "bg-black text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    Dine-In
+                  </button>
+                  <button
+                    onClick={() => setOrderFilters(prev => ({ ...prev, orderType: "takeaway" }))}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      orderFilters.orderType === "takeaway"
+                        ? "bg-black text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    Takeaway
+                  </button>
+                  {outlet.deliveryEnabled && (
+                    <button
+                      onClick={() => setOrderFilters(prev => ({ ...prev, orderType: "delivery" }))}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        orderFilters.orderType === "delivery"
+                          ? "bg-black text-white"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      }`}
+                    >
+                      Delivery
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Order Status Filter - Horizontal Buttons */}
+              <div className="flex-shrink-0">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Order Status</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setOrderFilters(prev => ({ ...prev, status: "active" }))}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      orderFilters.status === "active"
+                        ? "bg-black text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    Active
+                  </button>
+                  <button
+                    onClick={() => setOrderFilters(prev => ({ ...prev, status: "completed" }))}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      orderFilters.status === "completed"
+                        ? "bg-black text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    Completed
+                  </button>
+                </div>
+              </div>
+
+              {/* Payment Type Filter - Horizontal Buttons */}
+              <div className="flex-shrink-0">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Payment Type</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setOrderFilters(prev => ({ ...prev, paymentType: "pay_later" }))}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      orderFilters.paymentType === "pay_later"
+                        ? "bg-black text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    Pay Later
+                  </button>
+                  {(outlet.payNowEnabled ?? true) && (
+                    <button
+                      onClick={() => setOrderFilters(prev => ({ ...prev, paymentType: "pay_now" }))}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        orderFilters.paymentType === "pay_now"
+                          ? "bg-black text-white"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      }`}
+                    >
+                      Pay Now
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Date Range Filter - Dropdown */}
+              <div className="flex-shrink-0">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Date Range</label>
+                <select
+                  value={orderFilters.dateRange}
+                  onChange={(e) => setOrderFilters(prev => ({ ...prev, dateRange: e.target.value }))}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black"
+                >
+                  <option value="today">Today</option>
+                  <option value="week">This Week</option>
+                  <option value="month">This Month</option>
+                  <option value="all">All Time</option>
+                </select>
+              </div>
+            </div>
           </div>
           
           {ordersLoading ? (
-            <div className="text-center py-8">Loading orders...</div>
-          ) : outletOrders.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading orders...</p>
+            </div>
+          ) : filteredOrders.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
               <Package size={48} className="mx-auto mb-4 text-gray-300" />
-              <p>No orders yet</p>
+              <p className="font-medium">No orders found</p>
+              <p className="text-sm mt-1">Try adjusting your filters</p>
             </div>
           ) : (
             <div className="space-y-4">
-              {outletOrders.map((order) => (
+              {filteredOrders.map((order) => (
                 <div
                   key={order._id}
-                  className="border rounded-lg p-4 hover:shadow-md transition-shadow"
+                  className="border border-gray-200 rounded-lg p-5 hover:shadow-md transition-all bg-white"
                 >
                   <div className="flex justify-between items-start mb-3">
                     <div>
@@ -456,23 +843,35 @@ export default function OwnerOutlet() {
                         <h3 className="font-semibold text-gray-900">
                           Order #{order.orderNumber}
                         </h3>
-                        <span
-                          className={`px-2 py-1 text-xs rounded-full ${
-                            order.status === 'pending'
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : order.status === 'confirmed'
-                              ? 'bg-blue-100 text-blue-800'
-                              : order.status === 'preparing'
-                              ? 'bg-purple-100 text-purple-800'
-                              : order.status === 'ready' || order.status === 'out_for_delivery'
-                              ? 'bg-green-100 text-green-800'
-                              : order.status === 'delivered'
-                              ? 'bg-gray-100 text-gray-800'
-                              : 'bg-red-100 text-red-800'
-                          }`}
-                        >
-                          {getOrderStatusLabel(order.status, order.orderType)}
-                        </span>
+                        {order.orderType === 'dine_in' ? (
+                          <span
+                            className={`px-3 py-1 text-xs font-medium rounded-full ${
+                              isOrderCompleted(order)
+                                ? 'bg-gray-100 text-gray-800'
+                                : 'bg-green-100 text-green-800'
+                            }`}
+                          >
+                            {isOrderCompleted(order) ? 'Completed' : 'Active'}
+                          </span>
+                        ) : (
+                          <span
+                            className={`px-2 py-1 text-xs rounded-full ${
+                              order.status === 'pending'
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : order.status === 'confirmed'
+                                ? 'bg-blue-100 text-blue-800'
+                                : order.status === 'preparing'
+                                ? 'bg-purple-100 text-purple-800'
+                                : order.status === 'ready' || order.status === 'out_for_delivery'
+                                ? 'bg-green-100 text-green-800'
+                                : order.status === 'delivered'
+                                ? 'bg-gray-100 text-gray-800'
+                                : 'bg-red-100 text-red-800'
+                            }`}
+                          >
+                            {getOrderStatusLabel(order.status, order.orderType)}
+                          </span>
+                        )}
                         <span
                           className={`px-2 py-1 text-xs rounded-full ${
                             order.orderType === 'dine_in'
@@ -505,9 +904,13 @@ export default function OwnerOutlet() {
                       <p className="font-bold text-lg">₹{order.totalPrice.toFixed(2)}</p>
                       <p className="text-xs text-gray-500">{order.paymentMethod}</p>
                       {order.paymentType && (
-                        <p className="text-xs text-gray-500 capitalize">
-                          {order.paymentType.replace('_', ' ')}
-                        </p>
+                        <span className={`inline-block px-2 py-1 text-xs rounded-full mt-1 ${
+                          order.paymentType === 'pay_now' 
+                            ? 'bg-blue-100 text-blue-800' 
+                            : 'bg-orange-100 text-orange-800'
+                        }`}>
+                          {order.paymentType === 'pay_now' ? 'Pay Now' : 'Pay Later'}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -536,54 +939,70 @@ export default function OwnerOutlet() {
                     </div>
                   </div>
 
-                  <div className="border-t pt-3">
-                    <p className="text-sm text-gray-600 mb-2">
-                      <strong>Delivery:</strong> {order.deliveryAddress}
-                    </p>
-                    {/* KOT and Bill Actions */}
-                    <div className="flex gap-2 mb-2 flex-wrap">
+                  <div className="border-t pt-4 mt-3">
+                    {/* KOT and Bill Actions - Prominent */}
+                    <div className="flex gap-2 mb-3 flex-wrap">
                       {getUnpreparedItems(order).length > 0 && (
                         <button
                           onClick={() => handleGenerateKOT(order._id)}
-                          className="flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
                           title="Generate KOT for unprepared items"
                         >
-                          <Printer size={14} />
-                          Generate KOT ({getUnpreparedItems(order).length})
+                          <Printer size={16} />
+                          Generate KOT ({getUnpreparedItems(order).length} items)
                         </button>
                       )}
                       <button
                         onClick={() => handleGenerateBill(order._id)}
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                        className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-medium"
                         title="Generate Bill"
                       >
-                        <FileText size={14} />
+                        <FileText size={16} />
                         Generate Bill
                       </button>
                     </div>
-                    <div className="flex gap-2">
-                      {(() => {
-                        const nextAction = getNextStatusAction(order.status, order.orderType);
-                        if (nextAction) {
-                          const buttonColorClass = 
-                            order.status === 'pending' ? 'bg-blue-600 hover:bg-blue-700' :
-                            order.status === 'confirmed' ? 'bg-purple-600 hover:bg-purple-700' :
-                            order.status === 'preparing' ? 'bg-green-600 hover:bg-green-700' :
-                            order.status === 'ready' ? 'bg-orange-600 hover:bg-orange-700' :
-                            'bg-gray-600 hover:bg-gray-700';
-                          
-                          return (
-                            <button
-                              onClick={() => handleUpdateStatus(order._id, nextAction.nextStatus)}
-                              className={`flex-1 px-3 py-2 ${buttonColorClass} text-white rounded text-sm`}
-                            >
-                              {nextAction.label}
-                            </button>
-                          );
-                        }
-                        return null;
-                      })()}
-                    </div>
+
+                    {/* Order Status Actions */}
+                    {order.orderType === 'dine_in' ? (
+                      // For dine-in: Simple active/completed toggle
+                      <div className="flex gap-2">
+                        {!isOrderCompleted(order) ? (
+                          <button
+                            onClick={() => handleUpdateStatus(order._id, 'delivered')}
+                            className="flex-1 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors"
+                          >
+                            Mark as Completed
+                          </button>
+                        ) : (
+                          <div className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium text-center">
+                            Order Completed
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      // For takeaway and delivery: Show complete button if not completed
+                      <div className="flex gap-2">
+                        {!isOrderCompleted(order) ? (
+                          <button
+                            onClick={() => handleUpdateStatus(order._id, 'delivered')}
+                            className="flex-1 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors"
+                          >
+                            Mark as Completed
+                          </button>
+                        ) : (
+                          <div className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium text-center">
+                            Order Completed
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Delivery Address (only for delivery orders) */}
+                    {order.orderType === 'delivery' && (
+                      <p className="text-sm text-gray-600 mt-3 pt-3 border-t">
+                        <strong>Delivery Address:</strong> {order.deliveryAddress}
+                      </p>
+                    )}
                   </div>
                 </div>
               ))}

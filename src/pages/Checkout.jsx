@@ -54,8 +54,8 @@ export default function Checkout() {
   });
   
   const [paymentMethod, setPaymentMethod] = useState("card");
-  const [paymentType, setPaymentType] = useState("pay_now"); // pay_now or pay_later
-  const [orderType, setOrderType] = useState(""); // Required field
+  const [paymentType, setPaymentType] = useState("pay_later"); // pay_now or pay_later - default to pay_later
+  const [orderType, setOrderType] = useState("dine_in"); // Required field - default to dine_in
   const [tableNumber, setTableNumber] = useState(""); // Table number for dine-in orders
   const [outletData, setOutletData] = useState(null);
   const [loadingOutlet, setLoadingOutlet] = useState(true);
@@ -92,9 +92,23 @@ export default function Checkout() {
   // Reset orderType if delivery is disabled and user selected delivery
   useEffect(() => {
     if (!outletData?.deliveryEnabled && orderType === "delivery") {
-      setOrderType("");
+      setOrderType("dine_in"); // Reset to dine_in if delivery is disabled
     }
   }, [outletData, orderType]);
+
+  // Reset paymentType if payNow is disabled and user selected pay_now
+  useEffect(() => {
+    if (outletData?.payNowEnabled === false && paymentType === "pay_now") {
+      setPaymentType("pay_later");
+    }
+  }, [outletData, paymentType]);
+
+  // Reset paymentType if payLater is disabled and user selected pay_later
+  useEffect(() => {
+    if (outletData?.payLaterEnabled === false && paymentType === "pay_later") {
+      setPaymentType("pay_now");
+    }
+  }, [outletData, paymentType]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -157,6 +171,17 @@ export default function Checkout() {
     // Validate that delivery is not selected if disabled
     if (orderType === "delivery" && !outletData?.deliveryEnabled) {
       alert("Delivery is currently disabled for this outlet. Please select Dine-In or Takeaway.");
+      return;
+    }
+
+    // Validate payment type settings
+    if (paymentType === "pay_now" && (outletData?.payNowEnabled === false)) {
+      alert("Pay Now is currently disabled for this outlet. Please select Pay Later.");
+      return;
+    }
+
+    if (paymentType === "pay_later" && (outletData?.payLaterEnabled === false)) {
+      alert("Pay Later is currently disabled for this outlet. Please select Pay Now.");
       return;
     }
 
@@ -452,7 +477,7 @@ export default function Checkout() {
                   Payment Type
                 </label>
                 <div className="space-y-3 mb-4">
-                  <label className="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                  <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors ${outletData?.payNowEnabled === false ? 'opacity-60' : ''}`}>
                     <input
                       type="radio"
                       name="paymentType"
@@ -460,13 +485,17 @@ export default function Checkout() {
                       checked={paymentType === "pay_now"}
                       onChange={(e) => setPaymentType(e.target.value)}
                       className="mr-3"
+                      disabled={outletData?.payNowEnabled === false}
                     />
                     <div className="flex-1">
                       <span className="font-medium text-gray-900">Pay Now</span>
                       <p className="text-xs text-gray-600">Pay immediately via payment method</p>
+                      {outletData?.payNowEnabled === false && (
+                        <p className="text-xs text-red-500 mt-1">(Currently unavailable)</p>
+                      )}
                     </div>
                   </label>
-                  <label className="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                  <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors ${outletData?.payLaterEnabled === false ? 'opacity-60' : ''}`}>
                     <input
                       type="radio"
                       name="paymentType"
@@ -474,10 +503,14 @@ export default function Checkout() {
                       checked={paymentType === "pay_later"}
                       onChange={(e) => setPaymentType(e.target.value)}
                       className="mr-3"
+                      disabled={outletData?.payLaterEnabled === false}
                     />
                     <div className="flex-1">
                       <span className="font-medium text-gray-900">Pay Later</span>
                       <p className="text-xs text-gray-600">Pay at the restaurant/counter</p>
+                      {outletData?.payLaterEnabled === false && (
+                        <p className="text-xs text-red-500 mt-1">(Currently unavailable)</p>
+                      )}
                     </div>
                   </label>
                 </div>

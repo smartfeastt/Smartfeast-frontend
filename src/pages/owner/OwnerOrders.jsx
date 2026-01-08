@@ -30,7 +30,7 @@ export default function OwnerOrders() {
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
-    status: "all",
+    status: "all", // all, active, completed
     restaurant: "all",
     outlet: "all",
     orderType: "all",
@@ -157,10 +157,15 @@ export default function OwnerOrders() {
   const applyFilters = () => {
     let filtered = [...orders];
 
-    // Status filter
-    if (filters.status !== "all") {
-      filtered = filtered.filter(order => order.status === filters.status);
+    // Status filter (active vs completed)
+    if (filters.status === "active") {
+      const activeStatuses = ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery'];
+      filtered = filtered.filter(order => activeStatuses.includes(order.status));
+    } else if (filters.status === "completed") {
+      const completedStatuses = ['delivered', 'cancelled'];
+      filtered = filtered.filter(order => completedStatuses.includes(order.status));
     }
+    // 'all' doesn't filter by status
 
     // Restaurant filter
     if (filters.restaurant !== "all") {
@@ -268,6 +273,19 @@ export default function OwnerOrders() {
     }
   };
 
+  // Helper to check if order is completed
+  const isOrderCompleted = (order) => {
+    return order.status === 'delivered' || order.status === 'cancelled';
+  }
+
+  // Helper to get simplified status for dine-in orders
+  const getSimplifiedStatus = (order) => {
+    if (order.orderType === 'dine_in') {
+      return isOrderCompleted(order) ? 'Completed' : 'Active';
+    }
+    return getOrderStatusLabel(order.status, order.orderType);
+  }
+
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -311,18 +329,14 @@ export default function OwnerOrders() {
             </div>
             
             <select
-              value={filters.status}
-              onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
+              value={filters.orderType}
+              onChange={(e) => setFilters(prev => ({ ...prev, orderType: e.target.value }))}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black"
             >
-              <option value="all">All Status</option>
-              <option value="pending">Pending</option>
-              <option value="confirmed">Confirmed</option>
-              <option value="preparing">Preparing</option>
-              <option value="ready">Ready</option>
-              <option value="out_for_delivery">Out for Delivery</option>
-              <option value="delivered">Delivered</option>
-              <option value="cancelled">Cancelled</option>
+              <option value="all">All Order Types</option>
+              <option value="dine_in">Dine-In</option>
+              <option value="takeaway">Takeaway</option>
+              <option value="delivery">Delivery</option>
             </select>
             
             <select
@@ -374,14 +388,14 @@ export default function OwnerOrders() {
             </select>
           </div>
           
-          {/* Order Type Filter Bar */}
+          {/* Order Status Filter - Horizontal Buttons */}
           <div className="mt-4 pt-4 border-t border-gray-200">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-medium text-gray-700">Order Type:</span>
+              <span className="text-sm font-medium text-gray-700">Order Status:</span>
               <button
-                onClick={() => setFilters(prev => ({ ...prev, orderType: "all" }))}
+                onClick={() => setFilters(prev => ({ ...prev, status: "all" }))}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  filters.orderType === "all"
+                  filters.status === "all"
                     ? "bg-black text-white"
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                 }`}
@@ -389,34 +403,24 @@ export default function OwnerOrders() {
                 All
               </button>
               <button
-                onClick={() => setFilters(prev => ({ ...prev, orderType: "dine_in" }))}
+                onClick={() => setFilters(prev => ({ ...prev, status: "active" }))}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  filters.orderType === "dine_in"
+                  filters.status === "active"
                     ? "bg-black text-white"
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                 }`}
               >
-                Dine-In
+                Active
               </button>
               <button
-                onClick={() => setFilters(prev => ({ ...prev, orderType: "takeaway" }))}
+                onClick={() => setFilters(prev => ({ ...prev, status: "completed" }))}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  filters.orderType === "takeaway"
+                  filters.status === "completed"
                     ? "bg-black text-white"
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                 }`}
               >
-                Takeaway
-              </button>
-              <button
-                onClick={() => setFilters(prev => ({ ...prev, orderType: "delivery" }))}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  filters.orderType === "delivery"
-                    ? "bg-black text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                Delivery
+                Completed
               </button>
             </div>
             
@@ -485,9 +489,21 @@ export default function OwnerOrders() {
                   </div>
                   
                   <div className="flex items-center gap-3">
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(order.status)}`}>
-                      {getOrderStatusLabel(order.status, order.orderType)}
-                    </span>
+                    {order.orderType === 'dine_in' ? (
+                      <span
+                        className={`px-3 py-1 rounded-full text-sm font-medium ${
+                          isOrderCompleted(order)
+                            ? 'bg-gray-100 text-gray-800 border border-gray-200'
+                            : 'bg-green-100 text-green-800 border border-green-200'
+                        }`}
+                      >
+                        {isOrderCompleted(order) ? 'Completed' : 'Active'}
+                      </span>
+                    ) : (
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(order.status)}`}>
+                        {getOrderStatusLabel(order.status, order.orderType)}
+                      </span>
+                    )}
                     <span className={`px-3 py-1 rounded-full text-sm font-medium ${
                       order.orderType === 'dine_in' 
                         ? 'bg-blue-100 text-blue-800 border border-blue-200'
@@ -583,7 +599,7 @@ export default function OwnerOrders() {
                   </button>
                   
                   <div className="flex gap-2">
-                    {order.status !== "delivered" && order.status !== "cancelled" && (
+                    {!isOrderCompleted(order) ? (
                       <>
                         <button
                           onClick={() => {
@@ -595,38 +611,18 @@ export default function OwnerOrders() {
                         >
                           Cancel Order
                         </button>
-                        {(() => {
-                          const nextAction = getNextStatusAction(order.status, order.orderType);
-                          if (nextAction) {
-                            const buttonColorClass = 
-                              order.status === 'pending' ? 'bg-blue-600 hover:bg-blue-700' :
-                              order.status === 'confirmed' ? 'bg-purple-600 hover:bg-purple-700' :
-                              order.status === 'preparing' ? 'bg-green-600 hover:bg-green-700' :
-                              order.status === 'ready' ? 'bg-orange-600 hover:bg-orange-700' :
-                              order.status === 'out_for_delivery' ? 'bg-orange-600 hover:bg-orange-700' :
-                              'bg-black hover:bg-gray-800';
-                            
-                            return (
-                              <button
-                                onClick={() => handleUpdateOrderStatus(order._id || order.id, nextAction.nextStatus)}
-                                className={`px-3 py-1 text-sm ${buttonColorClass} text-white rounded transition-colors`}
-                              >
-                                {nextAction.label}
-                              </button>
-                            );
-                          }
-                          return null;
-                        })()}
+                        <button
+                          onClick={() => handleUpdateOrderStatus(order._id || order.id, "delivered")}
+                          className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded text-sm font-medium transition-colors"
+                        >
+                          Mark as Completed
+                        </button>
                       </>
-                    )}
-                    {order.status === "delivered" && (
-                      <span className="px-3 py-1 text-sm text-green-600 font-medium">
-                        Order Completed
-                      </span>
-                    )}
-                    {order.status === "cancelled" && (
-                      <span className="px-3 py-1 text-sm text-red-600 font-medium">
-                        Order Cancelled
+                    ) : (
+                      <span className={`px-3 py-1 text-sm font-medium ${
+                        order.status === "delivered" ? "text-green-600" : "text-red-600"
+                      }`}>
+                        {order.status === "delivered" ? "Order Completed" : "Order Cancelled"}
                       </span>
                     )}
                   </div>

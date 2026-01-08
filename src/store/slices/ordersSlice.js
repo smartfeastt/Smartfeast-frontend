@@ -111,15 +111,42 @@ export const updateOrderStatus = createAsyncThunk(
   }
 );
 
+// Load initial state from localStorage
+const loadInitialState = () => {
+  try {
+    const savedOutletOrders = localStorage.getItem('smartfeast_outlet_orders');
+    const savedUserOrders = localStorage.getItem('smartfeast_user_orders');
+    const savedOutletOrdersMap = savedOutletOrders ? JSON.parse(savedOutletOrders) : {};
+    const savedUserOrdersList = savedUserOrders ? JSON.parse(savedUserOrders) : [];
+    
+    return {
+      userOrders: savedUserOrdersList,
+      outletOrders: [], // Will be loaded per outlet
+      outletOrdersMap: savedOutletOrdersMap, // Map of outletId -> orders[]
+      loading: false,
+      error: null,
+      creating: false,
+      lastSync: null,
+      currentOutletId: null,
+    };
+  } catch (error) {
+    console.error('Error loading orders from localStorage:', error);
+    return {
+      userOrders: [],
+      outletOrders: [],
+      outletOrdersMap: {},
+      loading: false,
+      error: null,
+      creating: false,
+      lastSync: null,
+      currentOutletId: null,
+    };
+  }
+};
+
 const ordersSlice = createSlice({
   name: 'orders',
-  initialState: {
-    userOrders: [],
-    outletOrders: [],
-    loading: false,
-    error: null,
-    creating: false,
-  },
+  initialState: loadInitialState(),
   reducers: {
     addOrder: (state, action) => {
       state.userOrders.unshift(action.payload);
@@ -127,14 +154,49 @@ const ordersSlice = createSlice({
     addOrUpdateOutletOrder: (state, action) => {
       const order = action.payload;
       const orderId = order._id || order.id;
-      const outletIndex = state.outletOrders.findIndex((o) => (o._id || o.id) === orderId);
+      const outletId = order.outletId?._id?.toString() || order.outletId?.toString() || state.currentOutletId;
       
+      if (!outletId) {
+        console.warn('Cannot add order: no outletId found');
+        return;
+      }
+
+      // Update outletOrders array (for current outlet)
+      const outletIndex = state.outletOrders.findIndex((o) => (o._id || o.id) === orderId);
       if (outletIndex !== -1) {
         // Update existing order
         state.outletOrders[outletIndex] = { ...state.outletOrders[outletIndex], ...order };
       } else {
         // Add new order to the beginning of the array
         state.outletOrders.unshift(order);
+      }
+
+      // Update outletOrdersMap (persistent storage)
+      if (!state.outletOrdersMap[outletId]) {
+        state.outletOrdersMap[outletId] = [];
+      }
+      const mapIndex = state.outletOrdersMap[outletId].findIndex((o) => (o._id || o.id) === orderId);
+      if (mapIndex !== -1) {
+        state.outletOrdersMap[outletId][mapIndex] = { ...state.outletOrdersMap[outletId][mapIndex], ...order };
+      } else {
+        state.outletOrdersMap[outletId].unshift(order);
+      }
+
+      // Persist to localStorage
+      try {
+        localStorage.setItem('smartfeast_outlet_orders', JSON.stringify(state.outletOrdersMap));
+      } catch (error) {
+        console.error('Error saving orders to localStorage:', error);
+      }
+    },
+    setCurrentOutlet: (state, action) => {
+      const outletId = action.payload;
+      state.currentOutletId = outletId;
+      // Load orders for this outlet from map
+      if (state.outletOrdersMap[outletId]) {
+        state.outletOrders = state.outletOrdersMap[outletId];
+      } else {
+        state.outletOrders = [];
       }
     },
     updateOrder: (state, action) => {
@@ -152,6 +214,27 @@ const ordersSlice = createSlice({
     clearOrders: (state) => {
       state.userOrders = [];
       state.outletOrders = [];
+      state.outletOrdersMap = {};
+      try {
+        localStorage.removeItem('smartfeast_outlet_orders');
+        localStorage.removeItem('smartfeast_user_orders');
+      } catch (error) {
+        console.error('Error clearing orders from localStorage:', error);
+      }
+    },
+    clearOutletOrders: (state, action) => {
+      const outletId = action.payload;
+      if (outletId && state.outletOrdersMap[outletId]) {
+        delete state.outletOrdersMap[outletId];
+        if (state.currentOutletId === outletId) {
+          state.outletOrders = [];
+        }
+        try {
+          localStorage.setItem('smartfeast_outlet_orders', JSON.stringify(state.outletOrdersMap));
+        } catch (error) {
+          console.error('Error saving orders to localStorage:', error);
+        }
+      }
     },
   },
   extraReducers: (builder) => {
@@ -176,11 +259,28 @@ const ordersSlice = createSlice({
       })
       .addCase(fetchUserOrders.fulfilled, (state, action) => {
         state.loading = false;
-        state.userOrders = action.payload;
+        const orders = action.payload || [];
+        state.userOrders = orders;
+        
+        // Persist to localStorage
+        try {
+          localStorage.setItem('smartfeast_user_orders', JSON.stringify(orders));
+        } catch (error) {
+          console.error('Error saving user orders to localStorage:', error);
+        }
       })
       .addCase(fetchUserOrders.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+        // On error, try to load from cache
+        try {
+          const saved = localStorage.getItem('smartfeast_user_orders');
+          if (saved) {
+            state.userOrders = JSON.parse(saved);
+          }
+        } catch (error) {
+          console.error('Error loading user orders from cache:', error);
+        }
       })
       // Fetch outlet orders
       .addCase(fetchOutletOrders.pending, (state) => {
@@ -189,29 +289,73 @@ const ordersSlice = createSlice({
       })
       .addCase(fetchOutletOrders.fulfilled, (state, action) => {
         state.loading = false;
-        state.outletOrders = action.payload;
+        const orders = action.payload || [];
+        const outletId = action.meta.arg.outletId;
+        
+        // Update current outlet orders
+        state.outletOrders = orders;
+        state.currentOutletId = outletId;
+        
+        // Update outletOrdersMap for persistence
+        state.outletOrdersMap[outletId] = orders;
+        state.lastSync = new Date().toISOString();
+        
+        // Persist to localStorage
+        try {
+          localStorage.setItem('smartfeast_outlet_orders', JSON.stringify(state.outletOrdersMap));
+        } catch (error) {
+          console.error('Error saving orders to localStorage:', error);
+        }
       })
       .addCase(fetchOutletOrders.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+        // On error, try to load from cache
+        const outletId = action.meta.arg?.outletId;
+        if (outletId && state.outletOrdersMap[outletId]) {
+          state.outletOrders = state.outletOrdersMap[outletId];
+        }
       })
       // Update order status
       .addCase(updateOrderStatus.fulfilled, (state, action) => {
         const updatedOrder = action.payload;
-        const userIndex = state.userOrders.findIndex((o) => o._id === updatedOrder._id);
-        const outletIndex = state.outletOrders.findIndex((o) => o._id === updatedOrder._id);
+        const orderId = updatedOrder._id || updatedOrder.id;
+        const outletId = updatedOrder.outletId?._id?.toString() || updatedOrder.outletId?.toString() || state.currentOutletId;
         
+        // Update user orders
+        const userIndex = state.userOrders.findIndex((o) => o._id === orderId);
         if (userIndex !== -1) {
           state.userOrders[userIndex] = updatedOrder;
         }
+        
+        // Update outlet orders
+        const outletIndex = state.outletOrders.findIndex((o) => o._id === orderId);
         if (outletIndex !== -1) {
           state.outletOrders[outletIndex] = updatedOrder;
+        }
+        
+        // Update outletOrdersMap if outletId is known
+        if (outletId && state.outletOrdersMap[outletId]) {
+          const mapIndex = state.outletOrdersMap[outletId].findIndex((o) => (o._id || o.id) === orderId);
+          if (mapIndex !== -1) {
+            state.outletOrdersMap[outletId][mapIndex] = updatedOrder;
+          }
+        }
+        
+        // Persist to localStorage
+        try {
+          localStorage.setItem('smartfeast_outlet_orders', JSON.stringify(state.outletOrdersMap));
+          if (state.userOrders.length > 0) {
+            localStorage.setItem('smartfeast_user_orders', JSON.stringify(state.userOrders));
+          }
+        } catch (error) {
+          console.error('Error saving orders to localStorage:', error);
         }
       });
   },
 });
 
-export const { addOrder, addOrUpdateOutletOrder, updateOrder, clearOrders } = ordersSlice.actions;
+export const { addOrder, addOrUpdateOutletOrder, updateOrder, clearOrders, clearOutletOrders, setCurrentOutlet } = ordersSlice.actions;
 
 // Selectors
 export const selectUserOrders = (state) => state.orders.userOrders;

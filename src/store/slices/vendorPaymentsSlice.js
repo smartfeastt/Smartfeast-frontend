@@ -26,6 +26,20 @@ export const syncPayments = createAsyncThunk(
         },
       });
       
+      // Handle 404 gracefully - endpoint might not exist yet
+      if (response.status === 404) {
+        console.warn('[VendorPayments] Payment sync endpoint not found, skipping sync');
+        return {
+          payments: [],
+          syncedAt: new Date().toISOString(),
+        };
+      }
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Failed to sync payments' }));
+        return rejectWithValue(errorData.message || 'Failed to sync payments');
+      }
+      
       const data = await response.json();
       if (data.success) {
         return {
@@ -35,7 +49,12 @@ export const syncPayments = createAsyncThunk(
       }
       return rejectWithValue(data.message || 'Failed to sync payments');
     } catch (error) {
-      return rejectWithValue(error.message);
+      // Handle network errors gracefully
+      console.warn('[VendorPayments] Payment sync failed:', error.message);
+      return {
+        payments: [],
+        syncedAt: new Date().toISOString(),
+      };
     }
   }
 );
