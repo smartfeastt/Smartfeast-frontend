@@ -112,36 +112,40 @@ export const updateOrderStatus = createAsyncThunk(
 );
 
 // Load initial state from localStorage
+// TEMPORARILY DISABLED: Cache loading disabled, but keeping code structure
 const loadInitialState = () => {
-  try {
-    const savedOutletOrders = localStorage.getItem('smartfeast_outlet_orders');
-    const savedUserOrders = localStorage.getItem('smartfeast_user_orders');
-    const savedOutletOrdersMap = savedOutletOrders ? JSON.parse(savedOutletOrders) : {};
-    const savedUserOrdersList = savedUserOrders ? JSON.parse(savedUserOrders) : [];
-    
-    return {
-      userOrders: savedUserOrdersList,
-      outletOrders: [], // Will be loaded per outlet
-      outletOrdersMap: savedOutletOrdersMap, // Map of outletId -> orders[]
-      loading: false,
-      error: null,
-      creating: false,
-      lastSync: null,
-      currentOutletId: null,
-    };
-  } catch (error) {
-    console.error('Error loading orders from localStorage:', error);
-    return {
-      userOrders: [],
-      outletOrders: [],
-      outletOrdersMap: {},
-      loading: false,
-      error: null,
-      creating: false,
-      lastSync: null,
-      currentOutletId: null,
-    };
-  }
+  // TEMPORARILY DISABLED: Not loading from cache
+  // try {
+  //   const savedOutletOrders = localStorage.getItem('smartfeast_outlet_orders');
+  //   const savedUserOrders = localStorage.getItem('smartfeast_user_orders');
+  //   const savedOutletOrdersMap = savedOutletOrders ? JSON.parse(savedOutletOrders) : {};
+  //   const savedUserOrdersList = savedUserOrders ? JSON.parse(savedUserOrders) : [];
+  //   
+  //   return {
+  //     userOrders: savedUserOrdersList,
+  //     outletOrders: [], // Will be loaded per outlet
+  //     outletOrdersMap: savedOutletOrdersMap, // Map of outletId -> orders[]
+  //     loading: false,
+  //     error: null,
+  //     creating: false,
+  //     lastSync: null,
+  //     currentOutletId: null,
+  //   };
+  // } catch (error) {
+  //   console.error('Error loading orders from localStorage:', error);
+  // }
+  
+  // Return empty state instead of loading from cache
+  return {
+    userOrders: [],
+    outletOrders: [],
+    outletOrdersMap: {},
+    loading: false,
+    error: null,
+    creating: false,
+    lastSync: null,
+    currentOutletId: null,
+  };
 };
 
 const ordersSlice = createSlice({
@@ -272,15 +276,16 @@ const ordersSlice = createSlice({
       .addCase(fetchUserOrders.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+        // TEMPORARILY DISABLED: Not loading from cache on error
         // On error, try to load from cache
-        try {
-          const saved = localStorage.getItem('smartfeast_user_orders');
-          if (saved) {
-            state.userOrders = JSON.parse(saved);
-          }
-        } catch (error) {
-          console.error('Error loading user orders from cache:', error);
-        }
+        // try {
+        //   const saved = localStorage.getItem('smartfeast_user_orders');
+        //   if (saved) {
+        //     state.userOrders = JSON.parse(saved);
+        //   }
+        // } catch (error) {
+        //   console.error('Error loading user orders from cache:', error);
+        // }
       })
       // Fetch outlet orders
       .addCase(fetchOutletOrders.pending, (state) => {
@@ -310,11 +315,12 @@ const ordersSlice = createSlice({
       .addCase(fetchOutletOrders.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+        // TEMPORARILY DISABLED: Not loading from cache on error
         // On error, try to load from cache
-        const outletId = action.meta.arg?.outletId;
-        if (outletId && state.outletOrdersMap[outletId]) {
-          state.outletOrders = state.outletOrdersMap[outletId];
-        }
+        // const outletId = action.meta.arg?.outletId;
+        // if (outletId && state.outletOrdersMap[outletId]) {
+        //   state.outletOrders = state.outletOrdersMap[outletId];
+        // }
       })
       // Update order status
       .addCase(updateOrderStatus.fulfilled, (state, action) => {

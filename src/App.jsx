@@ -35,6 +35,7 @@ import OwnerProfile from "./pages/owner/OwnerProfile.jsx";
 import ManageMenu from "./pages/owner/ManageMenu.jsx";
 import OwnerDashboard from "./pages/owner/OwnerDashboard.jsx";
 import OwnerAnalytics from "./pages/owner/OwnerAnalytics.jsx";
+import OwnerInventory from "./pages/owner/OwnerInventory.jsx";
 import OwnerPayments from "./pages/owner/OwnerPayments.jsx";
 import OwnerOrders from "./pages/owner/OwnerOrders.jsx";
 import SignIn from "./pages/owner/SignIn.jsx";
@@ -102,6 +103,7 @@ export default function App() {
             <Route path="/owner/menu/:outletId" element={<ManageMenu />} />
             <Route path="/owner/profile" element={<OwnerProfile />} />
             <Route path="/owner/analytics" element={<OwnerAnalytics />} />
+            <Route path="/owner/inventory" element={<OwnerInventory />} />
             <Route path="/owner/payments" element={<OwnerPayments />} />
             <Route path="/owner/orders" element={<OwnerOrders />} />
             <Route path="/owner/restaurants" element={<OwnerRestaurants />} />

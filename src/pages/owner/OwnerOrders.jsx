@@ -41,6 +41,7 @@ export default function OwnerOrders() {
   const [restaurants, setRestaurants] = useState([]);
   const [outlets, setOutlets] = useState([]);
   const [outletMap, setOutletMap] = useState({}); // Map outlet name to outletId
+  const [restaurantToOutletsMap, setRestaurantToOutletsMap] = useState({}); // Map restaurant name to outlets array
 
   useEffect(() => {
     if (token && user?.type === 'owner') {
@@ -67,33 +68,30 @@ export default function OwnerOrders() {
       if (restaurantsData.success) {
         setRestaurants(restaurantsData.restaurants || []);
         
-        // Get all outlets from all restaurants
+        // Get all outlets from all restaurants and create mappings
         const allOutlets = [];
         const outletNameToIdMap = {};
+        const outletToRestaurantMap = {};
+        const restaurantToOutlets = {};
+        
         for (const restaurant of restaurantsData.restaurants || []) {
           const outletsResponse = await fetch(`${API_URL}/api/outlet/restaurant/${restaurant._id}`);
           const outletsData = await outletsResponse.json();
           if (outletsData.success) {
-            (outletsData.outlets || []).forEach(outlet => {
+            const restaurantOutlets = outletsData.outlets || [];
+            restaurantToOutlets[restaurant.name] = restaurantOutlets; // Map restaurant name to its outlets
+            
+            restaurantOutlets.forEach(outlet => {
               allOutlets.push(outlet);
               outletNameToIdMap[outlet.name] = outlet._id;
+              outletToRestaurantMap[outlet._id] = restaurant.name; // Map outlet ID to restaurant name
             });
           }
         }
+        
         setOutlets(allOutlets);
         setOutletMap(outletNameToIdMap);
-        
-        // Create a map of outletId to restaurant name
-        const outletToRestaurantMap = {};
-        for (const restaurant of restaurantsData.restaurants || []) {
-          const outletsResponse = await fetch(`${API_URL}/api/outlet/restaurant/${restaurant._id}`);
-          const outletsData = await outletsResponse.json();
-          if (outletsData.success) {
-            (outletsData.outlets || []).forEach(outlet => {
-              outletToRestaurantMap[outlet._id] = restaurant.name;
-            });
-          }
-        }
+        setRestaurantToOutletsMap(restaurantToOutlets);
         
         // Fetch orders from all outlets
         const allOrders = [];
@@ -361,19 +359,11 @@ export default function OwnerOrders() {
               disabled={filters.restaurant === "all"}
             >
               <option value="all">All Outlets</option>
-              {filters.restaurant !== "all" && outlets
-                .filter(outlet => {
-                  const restaurant = restaurants.find(r => r.name === filters.restaurant);
-                  if (!restaurant) return false;
-                  // Check if outlet belongs to this restaurant
-                  return restaurant.outlets?.some(id => id.toString() === outlet._id) ||
-                         orders.some(order => order.restaurant === restaurant.name && order.outlet === outlet.name);
-                })
-                .map(outlet => (
-                  <option key={outlet._id} value={outlet.name}>
-                    {outlet.name}
-                  </option>
-                ))}
+              {filters.restaurant !== "all" && restaurantToOutletsMap[filters.restaurant]?.map(outlet => (
+                <option key={outlet._id} value={outlet.name}>
+                  {outlet.name} {outlet.location ? `- ${outlet.location}` : ''}
+                </option>
+              ))}
             </select>
             
             <select

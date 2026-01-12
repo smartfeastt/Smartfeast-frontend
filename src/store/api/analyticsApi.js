@@ -14,6 +14,8 @@ export const analyticsApi = createApi({
       return headers;
     },
   }),
+  // TEMPORARILY DISABLED: Disable caching by setting keepUnusedDataFor to 0
+  keepUnusedDataFor: 0,
   tagTypes: ['Analytics'],
   endpoints: (builder) => ({
     // Get orders by type

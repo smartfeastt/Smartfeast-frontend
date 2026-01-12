@@ -14,6 +14,8 @@ export const paymentsApi = createApi({
       return headers;
     },
   }),
+  // TEMPORARILY DISABLED: Disable caching by setting keepUnusedDataFor to 0
+  keepUnusedDataFor: 0,
   tagTypes: ['Payment', 'Transaction'],
   endpoints: (builder) => ({
     // Get payments for vendor/outlet
